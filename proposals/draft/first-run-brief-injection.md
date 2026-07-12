@@ -1,0 +1,347 @@
+# Inject the Full Task Brief Into the First-Run Prompt
+
+Issue: https://github.com/icholy/xagent/issues/1398
+
+## Problem
+
+The wake path no longer depends on a tool call: the driver drains
+instruction + external **events** and injects them straight into the wake prompt
+(`proposals/draft/wake-prompt-event-injection.md`, shipped as #946 L1–L4, via
+`internal/agent/agentprompt`). But the **first run** still opens with a bootstrap
+instruction that tells the agent to go fetch its own context:
+
+```
+Use xagent:get_my_task to fetch your task instructions and execute them.
+...
+```
+
+(`internal/agent/agentprompt/PROMPT.md`, the `{{- else -}}` branch of the
+`Started` conditional.)
+
+So the very first turn of every task pays a `get_my_task` round-trip just to
+learn what it was asked to do — and it inherits the exact reliability hole #946
+set out to close on the wake path: the bootstrap only works if the prompt nags
+the model into calling the tool and the model complies. A harness that renders
+the `<invoke>` block as literal text and exits leaves a task that never learned
+its own instructions.
+
+The obvious fix — reuse the event-only injection the wake path already has —
+**loses information**. `get_my_task` (served by `taskDetailsToMap` in
+`internal/agentmcp/xmcp.go`) returns more than events: **id, name, status,
+workspace, namespace, url, instructions, links**, and events. Injecting only the
+events would drop name/status/workspace/namespace/url/links, so dropping the
+`get_my_task` instruction would not be lossless.
+
+This proposal renders the **full brief** — everything `taskDetailsToMap` returns
+— into the first-run prompt, so the bootstrap instruction can be dropped without
+losing a field. It completes the original #946 vision (a C2-rendered task brief)
+for the one path that still pulls its context instead of receiving it.
+
+## Design
+
+### What "full brief" means: the exact fields to preserve
+
+`get_my_task` renders `taskDetailsToMap(resp)` through
+`mcpx.JSONResult` — i.e. `json.MarshalIndent(taskDetailsToMap(resp), "", "  ")`.
+The map (`internal/agentmcp/xmcp.go:157`) is:
+
+```go
+map[string]any{
+    "id":           resp.Task.Id,
+    "name":         resp.Task.Name,
+    "status":       resp.Task.Status.String(),
+    "workspace":    resp.Task.Workspace,
+    "namespace":    resp.Task.Namespace,
+    "url":          resp.Task.Url,
+    "instructions": instructions, // projected from instruction events
+    "links":        links,
+    "events":       events,
+}
+```
+
+with `instructions`, `links`, and `events` each `protojson`-marshaled with
+`Indent: "  "` (`instructions` is the `GetInstruction()` payload projected out of
+the instruction events; `links` and `events` are the raw messages).
+
+The first-run brief must reproduce **this exact structure** so that dropping the
+`get_my_task` instruction is lossless — every field the agent would have pulled
+is now pushed. The brief is the same bytes `get_my_task` would have returned,
+wrapped in a short human-readable frame (see [The first-run
+branch](#the-first-run-prompmd-branch)).
+
+### The duplicated brief renderer (and the drift it creates)
+
+Per the settled design, the mapping is **duplicated** into `agentprompt` rather
+than shared with `agentmcp`. `agentprompt` gains a self-contained brief renderer:
+
+```go
+// RenderBrief marshals a task's full brief to the same indented-JSON shape
+// get_my_task returns. It deliberately DUPLICATES agentmcp.taskDetailsToMap —
+// see the drift note below — so agentprompt stays dependency-free of agentmcp
+// (it already depends only on the proto package to avoid an import cycle; see
+// the package doc).
+func RenderBrief(resp *xagentv1.GetTaskDetailsResponse) (string, error)
+```
+
+It builds the identical `map[string]any` (id, name, status, workspace,
+namespace, url, instructions, links, events), marshaling the nested messages
+with `protojson` + `Indent: "  "` exactly as `taskDetailsToMap` does, then
+`json.MarshalIndent(m, "", "  ")` — mirroring `mcpx.JSONResult`. It is registered
+as a `RenderBrief` template func alongside the existing `RenderEvent`
+(`internal/agent/agentprompt/agentprompt.go:40`).
+
+Why duplicate instead of share? `agentprompt`'s package doc is explicit: it
+"takes its inputs as parameters so it depends only on the proto package and not
+on internal/agent (avoiding an import cycle)." Importing `agentmcp` (which pulls
+in the MCP SDK, auth, and the client) to reuse one unexported helper would invert
+that dependency direction and drag a heavy surface into a package whose whole
+point is to be a thin, self-contained renderer. `taskDetailsToMap` is also
+unexported and lives next to tool plumbing that has nothing to do with prompt
+rendering. Duplication keeps each package honest about its own dependencies.
+
+**The drift risk this creates.** Two renderings of the same brief now live in two
+packages. If someone adds a field to `taskDetailsToMap` (say a new `priority`),
+the `get_my_task` tool grows it but the first-run brief silently does not — and
+because the first-run prompt is exactly the thing meant to be a *lossless*
+substitute for the tool, a divergence is a silent information loss on the one
+path with no fallback. This is the real cost of duplication and must not be left
+to reviewer vigilance.
+
+**Mitigation: a parity test.** A test in `internal/agent/agentprompt` (or a small
+neutral package that may import both) asserts the two renderings are
+byte-identical for a representative `GetTaskDetailsResponse` fixture:
+
+```go
+func TestBriefMatchesGetMyTask(t *testing.T) {
+    resp := fixtureTaskDetails() // task + instruction/external events + links
+
+    brief, err := agentprompt.RenderBrief(resp)
+    require.NoError(t, err)
+
+    // The exact bytes get_my_task returns.
+    want := agentmcp.RenderTaskDetailsJSON(resp) // taskDetailsToMap + MarshalIndent
+
+    require.Equal(t, want, brief)
+}
+```
+
+To make the tool's rendering testable without standing up an MCP server,
+`agentmcp` exposes a thin exported wrapper over the existing unexported helper
+(e.g. `RenderTaskDetailsJSON(resp) string` = `json.MarshalIndent(taskDetailsToMap(resp), "", "  ")`),
+which the parity test imports. The test lives in its own package so it may import
+both `agentprompt` and `agentmcp` without reintroducing the cycle the duplication
+was meant to avoid. Adding a field to one renderer and not the other now fails CI
+immediately, converting a silent semantic drift into a loud, mechanical one. The
+fixture should exercise every field (a named task with a url, a namespace, at
+least one instruction event, one external event, and one link) so an omission
+anywhere trips the assertion.
+
+### The driver fetch change
+
+The first-run brief needs task + links + events, which is exactly
+`GetTaskDetails` — and the driver already holds the client (`d.Client`) and
+already calls this shape of RPC. `runAgent` (`internal/agent/driver.go:147`)
+gains a first-run-only fetch:
+
+```go
+var details *xagentv1.GetTaskDetailsResponse
+if !cfg.Started {
+    details, err = d.Client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: d.TaskID})
+    if err != nil {
+        return fmt.Errorf("failed to fetch task brief: %w", err)
+    }
+}
+```
+
+This runs **only** when `!cfg.Started`; a wake run leaves `details` nil and is
+completely unchanged. The server already filters `GetTaskDetails` events to
+instruction + external (`internal/server/apiserver/task.go:205`), so the brief's
+`events`/`instructions` carry the same arms the tool does — no client-side
+filtering needed.
+
+The existing `drainEvents` call still runs on the first run too, unchanged: it
+seeds `NextEventToken` to the tail so the *next* wake injects only genuinely new
+events. So a first run makes two reads — `GetTaskDetails` (for the brief) and the
+token-seeding `drainEvents` (which the first run already does today). They serve
+different jobs (full brief vs. cursor seed) and neither subsumes the other; the
+[Trade-offs](#trade-offs) weigh collapsing them.
+
+### The `Options` extension
+
+`agentprompt.Options` (`internal/agent/agentprompt/agentprompt.go:44`) gains one
+field carrying the brief input:
+
+```go
+type Options struct {
+    Started bool
+    Prompt  string
+    Events  []*xagentv1.Event
+
+    // TaskDetails is the full task brief rendered into the first-run prompt in
+    // place of the get_my_task bootstrap instruction. It is nil on wake runs
+    // (Started == true), where the wake branch renders Events instead.
+    TaskDetails *xagentv1.GetTaskDetailsResponse
+}
+```
+
+The driver passes it through on the first run:
+
+```go
+prompt, err := agentprompt.Render(agentprompt.Options{
+    Started:     cfg.Started,
+    Prompt:      cfg.Prompt,
+    Events:      events,
+    TaskDetails: details, // nil on wake
+})
+```
+
+`Render` is otherwise unchanged — it still just executes the template against
+`opts`.
+
+### The first-run `PROMPT.md` branch
+
+The `{{- else -}}` (first-run) branch of `PROMPT.md` swaps the "call
+`get_my_task`" instruction for the rendered brief. The surrounding operational
+guidance the agent still needs — how to respond on external platforms, the
+`create_link`/`subscribe` convention, the `(task {id})` suffix, "your text
+responses are not visible" — is retained; only the *fetch-your-own-context*
+sentences go away, because the context is now inline:
+
+```
+Here is your task brief:
+
+{{ RenderBrief .TaskDetails }}
+
+If the task does not have a name, use xagent:update_my_task to set one.
+
+Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.
+If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.
+When responding on external platforms, always suffix your message with (task {id}) with your task id.
+
+When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create ...
+When done, use xagent:create_link for any URLs you created (PRs, issues, etc).
+Always use web URLs that users can visit, not API URLs.
+Use xagent:report to log important observations.
+If you need to re-check for updates mid-run, call xagent:get_my_task.
+
+Your text responses are NOT visible to users - only tool calls matter.
+```
+
+The `Started` / `Events` wake branches are untouched. The golden files under
+`internal/agent/agentprompt/testdata/` are updated: `prompt-first-run.golden`
+now shows the rendered brief, and a new fixture covers a first run whose brief
+carries instructions/links/events.
+
+### `get_my_task` stays
+
+The tool is unchanged and still registered (`internal/agentmcp/xmcp.go:47`).
+Dropping the *instruction to call it on the first run* is not the same as
+removing the tool. It remains the mid-run refresh: a long-running agent asking
+"did anything change while I was working?" pulls the current brief on demand. The
+first-run prompt even points at it for exactly that (the trailing "If you need to
+re-check for updates mid-run, call xagent:get_my_task" line). What goes away is
+the *dependency* on that call for the agent to learn its task at all — the same
+reliability win #946 delivered for the wake path, now on the first run.
+
+## Implementation Plan
+
+1. **`agentprompt.RenderBrief` + `Options.TaskDetails`** — Delivers: the
+   duplicated brief renderer in `internal/agent/agentprompt` (building the same
+   id/name/status/workspace/namespace/url/instructions/links/events map as
+   `taskDetailsToMap` and marshaling it identically), registered as a
+   `RenderBrief` template func, plus the nil-safe `TaskDetails` field on
+   `Options`. Depends on: nothing (pure addition; nothing renders it yet).
+   Verifiable by: a unit test calling `RenderBrief` on a fixture
+   `GetTaskDetailsResponse` and asserting the expected JSON shape.
+
+2. **Parity guard** — Delivers: the exported `agentmcp.RenderTaskDetailsJSON`
+   wrapper over `taskDetailsToMap`, and a parity test (in its own package that
+   imports both) asserting `agentprompt.RenderBrief(resp)` is byte-identical to
+   the `get_my_task` rendering for a field-complete fixture. Depends on: (1).
+   Verifiable by: the test passes now and fails if either renderer gains a field
+   the other lacks. This layer is the drift mitigation and should land *with* (1),
+   before anything depends on the brief.
+
+3. **First-run branch renders the brief** — Delivers: the `PROMPT.md` first-run
+   branch change (brief in place of the `get_my_task` bootstrap instruction,
+   operational guidance retained) and the updated/added golden files. Depends on:
+   (1). Verifiable by: the `agentprompt` golden tests — `prompt-first-run.golden`
+   now contains the rendered brief; a new golden covers a brief with
+   instructions/links/events. The wake goldens are unchanged.
+
+4. **Driver fetches and injects the brief** — Delivers: the first-run-only
+   `GetTaskDetails` fetch in `runAgent` and passing `details` through
+   `Options.TaskDetails`; wake runs pass nil and are unchanged. Depends on: (2),
+   (3). Verifiable by: a driver test asserting the first-run prompt contains the
+   fetched brief's fields (name, url, instruction text) and no longer contains
+   "Use xagent:get_my_task to fetch your task instructions", while the wake prompt
+   is byte-for-byte what it was before.
+
+Layer 1 is the self-contained foundation; layer 2 nails it down against drift
+before any caller relies on it; layers 3 and 4 wire it into the template and the
+driver. Layers 1–2 are safe to merge on their own (dead code plus a guarding
+test); the behavior change lands only when 3 and 4 merge.
+
+## Trade-offs
+
+**Duplicate the mapping vs. share `taskDetailsToMap`.** Chosen: duplicate, with a
+parity test as the guard (settled in #1398). Sharing would keep one source of
+truth but force `agentprompt` — deliberately dependency-minimal to avoid an
+import cycle — to import `agentmcp` and its heavy MCP/auth/client surface, or
+force a new shared package that both import. Duplication keeps each package's
+dependency story clean; the parity test converts the resulting drift risk from a
+silent semantic bug into a mechanical CI failure. The residual cost is one more
+place to edit when the brief shape changes — but the test guarantees you cannot
+edit one and forget the other.
+
+**Two first-run reads (`GetTaskDetails` + token-seeding `drainEvents`) vs. one.**
+The first run now fetches the brief *and* seeds the event cursor. We could try to
+collapse them — e.g. build the brief from the `drainEvents` page — but that page
+carries only instruction + external events, not the task row (name/status/
+workspace/namespace/url) or links, so it cannot produce the full brief. Going the
+other way (derive the seed token from `GetTaskDetails`) fails too: `GetTaskDetails`
+returns no pagination token. The two calls answer different questions; keeping
+both is simpler than a merged endpoint and the first-run cost is one extra read
+on a path that already makes several. A future `GetTaskDetails` that also returned
+a tail cursor could unify them, but that is out of scope here.
+
+**Render the raw `get_my_task` JSON vs. a prose brief.** We inject the same
+indented-JSON structure the tool returns, framed by one "Here is your task brief:"
+line — not a reformatted human summary. This keeps the brief provably lossless
+(the parity test can assert byte-equality against the tool), gives the agent one
+format to parse (the exact shape `get_my_task` already returns, which it must
+still handle for mid-run refresh), and adds no second rendering to maintain. The
+cost is that a JSON blob is less scannable than prose — acceptable, since the
+consumer is a model already fluent in this structure and losslessness is the
+whole point.
+
+**Backward compatibility.** The change is confined to the first-run prompt text.
+`get_my_task` is unchanged, so an agent (or a harness quirk) that still calls it
+on the first run gets the same answer it always did — the brief is now redundant
+for that agent, not conflicting. Wake runs are byte-for-byte unchanged (the wake
+branch, `Events`, and `drainEvents` are untouched; `TaskDetails` is nil there).
+A container recreate resets `Started` to false and simply re-renders the brief on
+the fresh first run. There is no schema, proto, or API change — `GetTaskDetails`
+already exists and is already called elsewhere.
+
+## Open Questions
+
+- **Where the parity test lives.** It must import both `agentprompt` and
+  `agentmcp`, so it cannot sit in either without risking the cycle the
+  duplication avoids. A dedicated `internal/agent/agentprompt/parity_test`
+  package (external test package) or a small `internal/agent/brieftest` package
+  are both viable; the proposal assumes the former.
+
+- **Should the first-run brief also carry pending wake events?** On the first run
+  `drainEvents` returns the current tail's events (used only to seed the token
+  today). The brief's `events` field already includes instruction + external
+  events from `GetTaskDetails`, so they are covered — but if a new external event
+  lands between the `GetTaskDetails` read and the token seed, it is delivered on
+  the next wake, not the first run. This matches the existing first-run/wake
+  split and is left as-is; flagged only so the overlap is deliberate, not
+  accidental.
+
+- **Trim the retained operational guidance?** The first-run branch keeps the
+  external-platform / `create_link` / `report` guidance. Some of it may be
+  better as static system-prompt content than per-run prompt text, but moving it
+  is orthogonal to this change and out of scope.
