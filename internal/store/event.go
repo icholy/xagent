@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
@@ -90,9 +91,29 @@ func (s *Store) ListEventsByTask(ctx context.Context, tx *sql.Tx, taskID int64, 
 }
 
 // eventCursor is the keyset an event page token encodes. events.id is a unique
-// monotonic bigserial, so it is a total order on its own — no tiebreaker.
+// monotonic bigserial, so it is a total order on its own — no tiebreaker. Types
+// binds the token to the filter it was minted under so a cursor can't be
+// silently replayed across a different types filter (resuming from an id over a
+// filter it was never paged with). It is stored in normalized (sorted) form so
+// the comparison is order-insensitive; the omitempty tag keeps the common
+// all-arms (nil/empty) token byte-compatible with tokens minted before the
+// filter was bound.
 type eventCursor struct {
-	ID int64 `json:"i"`
+	ID    int64    `json:"i"`
+	Types []string `json:"t,omitempty"`
+}
+
+// normalizeEventTypes returns an order-insensitive copy of the types filter so a
+// cursor's stamped Types compares and encodes independently of the caller's
+// ordering. An empty filter (all arms) normalizes to nil so the token omits the
+// field entirely.
+func normalizeEventTypes(types []string) []string {
+	if len(types) == 0 {
+		return nil
+	}
+	out := slices.Clone(types)
+	slices.Sort(out)
+	return out
 }
 
 // ListEventsByTaskPageParams mirrors the RPC's pagination fields as plain values
@@ -119,6 +140,13 @@ type eventSource struct {
 // (rows newer than the cursor); token.Backward == false the primary descending
 // walk (a nil cursor = newest page).
 func (src eventSource) Query(ctx context.Context, token pagination.Token[eventCursor], limit int) ([]*model.Event, error) {
+	// The token binds the filter it was minted under: a cursor whose Types stamp
+	// disagrees with this request is a cross-filter replay, rejected as a bad
+	// request (→ CodeInvalidArgument) rather than silently resumed. Both sides are
+	// normalized so the comparison is order-insensitive.
+	if token.Cursor != nil && !slices.Equal(normalizeEventTypes(token.Cursor.Types), normalizeEventTypes(src.params.Types)) {
+		return nil, fmt.Errorf("%w: page token does not match types filter", pagination.ErrInvalidRequest)
+	}
 	// A nil slice encodes as SQL NULL (cardinality(NULL) is NULL, not 0), which
 	// would filter everything out; coerce to an empty array so the "all types"
 	// case matches the query's cardinality(...) = 0 guard.
@@ -157,7 +185,7 @@ func (src eventSource) Query(ctx context.Context, token pagination.Token[eventCu
 }
 
 func (src eventSource) Cursor(e *model.Event) eventCursor {
-	return eventCursor{ID: e.ID}
+	return eventCursor{ID: e.ID, Types: normalizeEventTypes(src.params.Types)}
 }
 
 // ListEventsByTaskPage returns a bidirectional keyset page of a task's events,
@@ -165,9 +193,10 @@ func (src eventSource) Cursor(e *model.Event) eventCursor {
 // page; the returned NextToken continues toward older history (empties when
 // exhausted) and PrevToken toward newer rows (stays populated on a non-empty
 // page so the append-only tail can be followed). It owns the cursor keyset (id),
-// the page-size bounds, and the opaque token format. A bad PageSize or an
-// undecodable PageToken surfaces as a wrapped pagination.ErrInvalidRequest;
-// query failures surface as-is.
+// the page-size bounds, and the opaque token format. A bad PageSize, an
+// undecodable PageToken, or a token whose types filter disagrees with the
+// request surfaces as a wrapped pagination.ErrInvalidRequest; query failures
+// surface as-is.
 func (s *Store) ListEventsByTaskPage(ctx context.Context, tx *sql.Tx, p ListEventsByTaskPageParams) (*pagination.Page[*model.Event], error) {
 	// Timelines are dense (a report/lifecycle/tool row per step), so the default
 	// and max pages are larger than the task list's; Reverse renders oldest-at-top.
