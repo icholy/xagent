@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
@@ -43,6 +44,10 @@ type Server struct {
 	// shells registers debug-shell rendezvous sessions for OpenShell. May be nil
 	// in tests that don't exercise OpenShell.
 	shells ShellRegistry
+	// router runs the shared read-only matcher (Router.Plan) for TestEvent's
+	// dry-run path. May be nil in tests that don't exercise TestEvent; the
+	// handler errors if it's called without one.
+	router *eventrouter.Router
 }
 
 // ShellRegistry registers a debug-shell rendezvous session so the driver and
@@ -61,6 +66,7 @@ type Options struct {
 	GitHub    GithubServer
 	AppKey    ed25519.PrivateKey
 	Shells    ShellRegistry
+	Router    *eventrouter.Router
 }
 
 func New(opts Options) *Server {
@@ -77,6 +83,7 @@ func New(opts Options) *Server {
 		github:    opts.GitHub,
 		appKey:    opts.AppKey,
 		shells:    opts.Shells,
+		router:    opts.Router,
 	}
 }
 

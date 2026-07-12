@@ -3,13 +3,11 @@ package apiserver
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/eventrouter"
-	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
@@ -49,29 +47,22 @@ func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesR
 // TestEvent feeds a hand-composed synthetic event into the real routing code
 // scoped to the caller's org (see proposals/draft/test-event-injection.md). This
 // is the dry-run path (OpOrgRead): it composes an InputEvent from the request,
-// runs the shared matcher (Router.Plan) and the subscribed-link lookup, and
-// reports which rule matched and which tasks would wake or be created — without
-// writing any events or tasks rows. Fire mode (fire=true) is a later layer; the
-// request's fire flag is ignored here and Fired is always false.
+// runs the shared matcher (Router.Plan), and reports which rule matched and
+// whether it would wake or create — without writing any events or tasks rows.
+// Fire mode (fire=true) is a later layer; the request's fire flag is ignored
+// here and Fired is always false.
+//
+// The request is not validated against the schema registry: attrs pass through
+// as-is, and an unknown source/type/attr simply yields no match rather than an
+// error. Task/link resolution is intentionally skipped — the report is derived
+// from the matched rule alone.
 func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) (*xagentv1.TestEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	if !caller.Scopes.Allow(authscope.OpOrgRead) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
 	}
-
-	// Validate (source, type) against the registry and reject unknown attr keys,
-	// mirroring the contract SchemaRegistry.Validate enforces for rules: a typo'd
-	// attr must fail loudly as a non-match rather than be silently ignored. details
-	// keys are deliberately not validated — they're free-form source-defined
-	// context (§2a).
-	def, ok := eventrouter.DefaultSchemaRegistry.EventTypeFor(req.Source, req.Type)
-	if !ok {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("unknown event type: source=%q type=%q", req.Source, req.Type))
-	}
-	validAttr := map[string]bool{}
-	for _, attr := range def.Attrs {
-		validAttr[attr.Key] = true
+	if s.router == nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("event router not configured"))
 	}
 
 	// Compose the synthetic InputEvent. The "body" and "url" attrs are the derived
@@ -89,10 +80,6 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 		Details:     req.Details,
 	}
 	for key, value := range req.Attrs {
-		if !validAttr[key] {
-			return nil, connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("attr %q not valid for event type %q/%q", key, req.Source, req.Type))
-		}
 		switch key {
 		case "body":
 			input.Data = value
@@ -109,15 +96,11 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 	// Plan is the shared read-only matcher — running it (not a parallel simulator)
 	// is what guarantees the dry-run report agrees with what firing would do. No
 	// OnRouteOutcome: dry run never applies anything.
-	router := &eventrouter.Router{Log: s.log, Store: s.store, Publisher: s.publisher}
-	matches, err := router.Plan(ctx, input)
+	matches, err := s.router.Plan(ctx, input)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// Links are stored under routing_key = model.RoutingKey(url); derive the key the
-	// same way so a non-canonical event URL resolves to the same key as the link.
-	key := model.RoutingKey(input.URL)
 	var pbMatches []*xagentv1.TestEventMatch
 	for _, match := range matches {
 		// Scope to the caller's org (§4): Plan evaluates every org the caller is a
@@ -125,29 +108,6 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 		// is looking at.
 		if match.OrgID != caller.OrgID {
 			continue
-		}
-
-		// Same subscribed-link lookup Route uses to decide wake vs. create: links
-		// present -> the subscribed tasks would wake; otherwise a task would be
-		// created if the matched rule opts in.
-		linksByOrg, err := s.store.FindSubscribedLinksForOrgs(ctx, nil, key, []int64{match.OrgID})
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		links := linksByOrg[match.OrgID]
-
-		var wakeTasks []*xagentv1.TestEventTask
-		seen := map[int64]bool{}
-		for _, link := range links {
-			if seen[link.TaskID] {
-				continue
-			}
-			seen[link.TaskID] = true
-			task, err := s.store.GetTask(ctx, nil, link.TaskID, match.OrgID)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, err)
-			}
-			wakeTasks = append(wakeTasks, &xagentv1.TestEventTask{Id: task.ID, Name: task.Name})
 		}
 
 		// A default-rule match has no configured index; report it as -1 (the proto
@@ -160,8 +120,7 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 			OrgId:       match.OrgID,
 			RuleIndex:   ruleIndex,
 			WouldWake:   match.Rule.Wakeup,
-			WakeTasks:   wakeTasks,
-			WouldCreate: len(links) == 0 && match.Rule.Create != nil,
+			WouldCreate: match.Rule.Create != nil,
 		})
 	}
 

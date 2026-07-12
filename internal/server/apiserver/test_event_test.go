@@ -3,7 +3,7 @@ package apiserver
 import (
 	"testing"
 
-	"connectrpc.com/connect"
+	"github.com/icholy/xagent/internal/eventrouter"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
@@ -11,9 +11,20 @@ import (
 	"gotest.tools/v3/assert"
 
 	// Blank-imported so their init registers the eventrouter schemas TestEvent
-	// validates and routes against (see event_types_test.go).
+	// routes against (see event_types_test.go).
 	_ "github.com/icholy/xagent/internal/server/githubserver"
 )
+
+// newTestEventServer builds an apiserver with a router wired to the given store,
+// as TestEvent requires.
+func newTestEventServer(t *testing.T) *Server {
+	t.Helper()
+	st := teststore.New(t)
+	return New(Options{
+		Store:  st,
+		Router: &eventrouter.Router{Store: st},
+	})
+}
 
 // countRows returns the number of tasks and events an org holds, so a dry-run
 // test can assert TestEvent persisted nothing.
@@ -30,7 +41,7 @@ func TestTestEvent_DryRun_Wake(t *testing.T) {
 	t.Parallel()
 	// Arrange: a rule matching a "xagent:"-prefixed comment body, plus an existing
 	// task subscribed to the event URL.
-	srv := New(Options{Store: teststore.New(t)})
+	srv := newTestEventServer(t)
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 	err := srv.store.SetOrgRoutingRules(ctx, nil, org.OrgID, []model.RoutingRule{
@@ -39,7 +50,7 @@ func TestTestEvent_DryRun_Wake(t *testing.T) {
 	})
 	assert.NilError(t, err)
 	const url = "https://github.com/o/r/issues/1"
-	task := teststore.CreateTask(t, srv.store, org, &teststore.TaskOptions{
+	teststore.CreateTask(t, srv.store, org, &teststore.TaskOptions{
 		Links: []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
 
@@ -52,7 +63,8 @@ func TestTestEvent_DryRun_Wake(t *testing.T) {
 		Attrs:  map[string]string{"body": "xagent: do it", "url": url},
 	})
 
-	// Assert: one match reporting the woken task, no create.
+	// Assert: one match reporting a wake, no create. The report is derived from the
+	// matched rule alone — no task resolution.
 	assert.NilError(t, err)
 	assert.Assert(t, !resp.Fired)
 	assert.DeepEqual(t, resp.Matches, []*xagentv1.TestEventMatch{
@@ -60,7 +72,6 @@ func TestTestEvent_DryRun_Wake(t *testing.T) {
 			OrgId:     org.OrgID,
 			RuleIndex: 0,
 			WouldWake: true,
-			WakeTasks: []*xagentv1.TestEventTask{{Id: task.ID, Name: task.Name}},
 		},
 	}, protocmp.Transform())
 
@@ -73,7 +84,7 @@ func TestTestEvent_DryRun_Wake(t *testing.T) {
 func TestTestEvent_DryRun_Create(t *testing.T) {
 	t.Parallel()
 	// Arrange: a create rule with no subscribed link for the URL.
-	srv := New(Options{Store: teststore.New(t)})
+	srv := newTestEventServer(t)
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 	err := srv.store.SetOrgRoutingRules(ctx, nil, org.OrgID, []model.RoutingRule{
@@ -107,7 +118,7 @@ func TestTestEvent_DryRun_Create(t *testing.T) {
 func TestTestEvent_DryRun_NoMatch(t *testing.T) {
 	t.Parallel()
 	// Arrange: a rule that won't match the event body.
-	srv := New(Options{Store: teststore.New(t)})
+	srv := newTestEventServer(t)
 	org := teststore.CreateOrg(t, srv.store, nil)
 	ctx := createCtx(t, org)
 	err := srv.store.SetOrgRoutingRules(ctx, nil, org.OrgID, []model.RoutingRule{
@@ -132,7 +143,7 @@ func TestTestEvent_ScopedToCallerOrg(t *testing.T) {
 	t.Parallel()
 	// Arrange: two orgs each with a matching rule + subscribed task on the same
 	// URL. A caller in orgA must only see orgA's match.
-	srv := New(Options{Store: teststore.New(t)})
+	srv := newTestEventServer(t)
 	orgA := teststore.CreateOrg(t, srv.store, nil)
 	orgB := teststore.CreateOrg(t, srv.store, nil)
 	ctxA := createCtx(t, orgA)
@@ -143,7 +154,7 @@ func TestTestEvent_ScopedToCallerOrg(t *testing.T) {
 	}
 	assert.NilError(t, srv.store.SetOrgRoutingRules(ctxA, nil, orgA.OrgID, rule))
 	assert.NilError(t, srv.store.SetOrgRoutingRules(ctxA, nil, orgB.OrgID, rule))
-	taskA := teststore.CreateTask(t, srv.store, orgA, &teststore.TaskOptions{
+	teststore.CreateTask(t, srv.store, orgA, &teststore.TaskOptions{
 		Links: []teststore.LinkOptions{{URL: url, Subscribe: true}},
 	})
 	teststore.CreateTask(t, srv.store, orgB, &teststore.TaskOptions{
@@ -157,32 +168,13 @@ func TestTestEvent_ScopedToCallerOrg(t *testing.T) {
 		Attrs:  map[string]string{"body": "xagent: do it", "url": url},
 	})
 
-	// Assert: only orgA's match, with only orgA's task.
+	// Assert: only orgA's match is reported.
 	assert.NilError(t, err)
 	assert.DeepEqual(t, resp.Matches, []*xagentv1.TestEventMatch{
 		{
 			OrgId:     orgA.OrgID,
 			RuleIndex: 0,
 			WouldWake: true,
-			WakeTasks: []*xagentv1.TestEventTask{{Id: taskA.ID, Name: taskA.Name}},
 		},
 	}, protocmp.Transform())
-}
-
-func TestTestEvent_RejectsInvalid(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, nil)
-	ctx := createCtx(t, org)
-
-	cases := map[string]*xagentv1.TestEventRequest{
-		"unknown type": {Source: "github", Type: "not_a_type"},
-		"unknown attr": {Source: "github", Type: "issue_comment", Attrs: map[string]string{"nope": "x"}},
-	}
-	for name, req := range cases {
-		t.Run(name, func(t *testing.T) {
-			_, err := srv.TestEvent(ctx, req)
-			assert.Equal(t, connect.CodeOf(err), connect.CodeInvalidArgument)
-		})
-	}
 }
