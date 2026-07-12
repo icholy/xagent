@@ -2,7 +2,12 @@
 {{- if .Events -}}
 The task received new events:
 
-{{ eventsJSON .Events }}
+[
+{{- range $i, $event := .Events }}
+{{- if $i }},{{ end }}
+{{ RenderEvent $event }}
+{{- end }}
+]
 
 Continue working on the task.
 {{- else -}}

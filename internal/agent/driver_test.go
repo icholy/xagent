@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -421,22 +422,31 @@ func TestConfigPrompt_Started(t *testing.T) {
 }
 
 func TestConfigPrompt_StartedWithEvents(t *testing.T) {
-	// A wake with pending events injects the raw event JSON directly (marshaled by
-	// the template's eventsJSON func), so the wake no longer depends on a
-	// get_my_task tool call.
+	// A wake with pending events injects the raw event JSON directly (each event
+	// rendered by the template's RenderEvent func and joined into an array), so
+	// the wake no longer depends on a get_my_task tool call.
 	events := []*xagentv1.Event{
 		{Id: 42, Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{Description: "PR review requested"}}},
+		{Id: 43, Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{Text: "keep going"}}},
 	}
-	want, err := marshalEventsJSON(events)
-	assert.NilError(t, err)
-
 	cfg := &Config{Started: true}
 	got, err := cfg.prompt(events)
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(got, "The task received new events:"))
-	assert.Assert(t, strings.Contains(got, want))
 	assert.Assert(t, strings.Contains(got, "Continue working on the task."))
 	assert.Assert(t, !strings.Contains(got, "get_my_task"))
+
+	// Each event's rendered JSON is present, and the injected block parses as a
+	// JSON array of all of them (the template loops and comma-joins).
+	for _, e := range events {
+		want, err := RenderEvent(e)
+		assert.NilError(t, err)
+		assert.Assert(t, strings.Contains(got, want))
+	}
+	block := got[strings.Index(got, "["):strings.LastIndex(got, "]")+1]
+	var arr []json.RawMessage
+	assert.NilError(t, json.Unmarshal([]byte(block), &arr))
+	assert.Assert(t, cmp.Len(arr, 2))
 }
 
 func TestConfigPrompt_WorkspacePromptAppended(t *testing.T) {

@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -297,39 +296,31 @@ func (d *Driver) drainEvents(ctx context.Context, cfg *Config) ([]*xagentv1.Even
 	return events, token, nil
 }
 
-// marshalEventsJSON renders events as a raw JSON array using the same protojson
-// options get_my_task's taskDetailsToMap uses (Indent: "  "), so the injected
-// payload is byte-for-byte the shape the events array already has in
-// get_my_task output — the agent parses one format, not two. It is registered as
-// the eventsJSON template func so the marshaling happens inside PROMPT.md.
-func marshalEventsJSON(events []*xagentv1.Event) (string, error) {
-	marshalOpts := protojson.MarshalOptions{Indent: "  "}
-	raws := make([]json.RawMessage, len(events))
-	for i, e := range events {
-		data, err := marshalOpts.Marshal(e)
-		if err != nil {
-			return "", err
-		}
-		raws[i] = data
-	}
-	out, err := json.MarshalIndent(raws, "", "  ")
+// RenderEvent marshals a single event to JSON using the same protojson options
+// get_my_task's taskDetailsToMap uses (Indent: "  "), so an injected event is
+// byte-for-byte the shape it has in the get_my_task events array — the agent
+// parses one format, not two. It is registered as the RenderEvent template func;
+// PROMPT.md loops over the events and joins the rendered objects into a JSON
+// array.
+func RenderEvent(event *xagentv1.Event) (string, error) {
+	data, err := protojson.MarshalOptions{Indent: "  "}.Marshal(event)
 	if err != nil {
 		return "", err
 	}
-	return string(out), nil
+	return string(data), nil
 }
 
 //go:embed PROMPT.md
 var promptText string
 
 var promptTemplate = template.Must(
-	template.New("prompt").Funcs(template.FuncMap{"eventsJSON": marshalEventsJSON}).Parse(promptText),
+	template.New("prompt").Funcs(template.FuncMap{"RenderEvent": RenderEvent}).Parse(promptText),
 )
 
 // prompt builds the bootstrap prompt sent to the agent. events is the instruction
-// + external events since the saved cursor; the wake branch of the template
-// marshals them via the eventsJSON func. It is empty on the first run and on a
-// wake with nothing pending, in which case nothing is injected.
+// + external events since the saved cursor; the wake branch of the template loops
+// over them, rendering each via the RenderEvent func. It is empty on the first run
+// and on a wake with nothing pending, in which case nothing is injected.
 func (c *Config) prompt(events []*xagentv1.Event) (string, error) {
 	var b strings.Builder
 	err := promptTemplate.Execute(&b, struct {
