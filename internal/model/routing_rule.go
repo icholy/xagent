@@ -22,6 +22,11 @@ type RoutingRule struct {
 	// need not be oauth-linked). Defaults false — rules are member-only unless
 	// explicitly opted in.
 	Public bool `json:"public,omitempty"`
+	// Namespace partitions subscription matching. The router scopes this rule's
+	// wake-vs-create decision to subscribers whose task shares this namespace,
+	// and a created task is stamped with it. Empty is the default namespace —
+	// the behavior every existing rule already has.
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // Condition constrains one attribute dimension of an event. Op is one of

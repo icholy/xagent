@@ -135,22 +135,30 @@ func (r *Router) Plan(ctx context.Context, input InputEvent) ([]RouteMatch, erro
 	// so matching runs directly through the attribute-based matcher against the
 	// input event. A ruleless org matches nothing.
 	//
-	// First matching rule per org; orgs with no match are dropped.
+	// First matching rule per (org, namespace); orgs with no match are dropped.
+	// Matching per namespace keeps rules in different namespaces from shadowing
+	// each other — a namespaced create rule fires even when a default-namespace
+	// rule matches the same event. With every rule in the default namespace this
+	// reduces to the prior first-match-per-org behavior.
 	var matches []RouteMatch
 	for _, org := range orgs {
+		matchedNS := map[string]bool{}
 		for i, rule := range org.Rules {
 			// Member org: every rule is eligible. Non-member org (in input.Orgs
 			// but not the actor's): only rules that opted in via Public.
 			if !org.IsMember && !rule.Public {
 				continue
 			}
+			if matchedNS[rule.Namespace] {
+				continue
+			}
 			if Match(rule, input) {
+				matchedNS[rule.Namespace] = true
 				matches = append(matches, RouteMatch{
 					OrgID:     org.OrgID,
 					Rule:      &rule,
 					RuleIndex: i,
 				})
-				break
 			}
 		}
 	}
@@ -190,7 +198,20 @@ func (r *Router) Apply(ctx context.Context, input InputEvent, matches []RouteMat
 	for i, match := range matches {
 		outcome := RouteOutcome{Input: input, OrgID: match.OrgID, Rule: match.Rule}
 
-		if links := linksByOrg[match.OrgID]; len(links) > 0 {
+		// Scope the wake-vs-create decision to the matched rule's namespace:
+		// filter the single batch lookup (no extra query) to subscribers whose
+		// task shares the rule's namespace. A default-namespace subscriber no
+		// longer suppresses a namespaced rule's create, and fan-out stays within
+		// the namespace. With everything in the default namespace this matches
+		// every link, so behavior is unchanged.
+		var links []*model.Link
+		for _, link := range linksByOrg[match.OrgID] {
+			if link.Namespace == match.Rule.Namespace {
+				links = append(links, link)
+			}
+		}
+
+		if len(links) > 0 {
 			// Events are task-scoped: fan the external event out as one event row
 			// per subscribed task instead of a shared row plus junction rows.
 			seen := map[int64]bool{}
@@ -386,6 +407,7 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			Command:     model.TaskCommandStart,
 			Version:     1,
 			OrgID:       orgID,
+			Namespace:   rule.Namespace,
 			AutoArchive: rule.Create.AutoArchive,
 		}
 		if err := r.Store.CreateTask(ctx, tx, task); err != nil {

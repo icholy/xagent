@@ -1273,6 +1273,130 @@ func TestRouteMemberOrgInOrgsUsesFullRuleSet(t *testing.T) {
 	assert.Equal(t, updated.Status, model.TaskStatusPending)
 }
 
+func TestRouteNamespacedCreateRuleFiresPastDefaultSubscriber(t *testing.T) {
+	t.Parallel()
+
+	// The motivating scenario: an implementing task in the default namespace already
+	// subscribes to the PR. A reviewbot-namespace create rule (wakeup off) must still
+	// spawn a reviewer instead of silently attaching to that default subscriber,
+	// because the subscription check is now scoped to the rule's namespace.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/1"
+
+	// Default-namespace subscriber (the implementing task) present on the PR.
+	implementer := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+
+	// A reviewbot-namespace create rule keyed on the reviewbot label.
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{{
+		Source:     "github",
+		Type:       "label_added",
+		Namespace:  "reviewbot",
+		Conditions: []model.Condition{{Attr: "label", Op: "equals", Value: "reviewbot"}},
+		Create:     &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+	}}))
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "label_added",
+		URL:    url,
+		UserID: org.UserID,
+		Attrs:  eventrouter.Attrs{"label": {"reviewbot"}},
+	})
+
+	// Assert: the reviewer was created, not attached to the implementer.
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 2)
+
+	// The default-namespace implementer is untouched — the reviewbot rule never saw it.
+	updated, err := s.GetTask(t.Context(), nil, implementer.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusCompleted)
+	assert.Equal(t, updated.Namespace, "")
+
+	// The freshly created reviewer is stamped with the rule's namespace.
+	var reviewer *model.Task
+	for _, tk := range tasks {
+		if tk.ID != implementer.ID {
+			reviewer = tk
+		}
+	}
+	assert.Assert(t, reviewer != nil)
+	assert.Equal(t, reviewer.Namespace, "reviewbot")
+	assert.Equal(t, reviewer.Status, model.TaskStatusPending)
+}
+
+func TestRouteRulesInDifferentNamespacesBothFire(t *testing.T) {
+	t.Parallel()
+
+	// Two rules match the same event in different namespaces: a default-namespace
+	// wake rule and a reviewbot-namespace create rule. Per-(org, namespace) matching
+	// fires both — the default rule wakes the default subscriber, the reviewbot rule
+	// creates its reviewer — instead of the first match shadowing the second.
+	s := teststore.New(t)
+	org := teststore.CreateOrg(t, s, nil)
+	url := "https://github.com/owner/repo/pull/1"
+
+	implementer := teststore.CreateTask(t, s, org, &teststore.TaskOptions{
+		Status: model.TaskStatusCompleted,
+		Links:  []teststore.LinkOptions{{URL: url, Subscribe: true}},
+	})
+
+	assert.NilError(t, s.SetOrgRoutingRules(t.Context(), nil, org.OrgID, []model.RoutingRule{
+		// Default-namespace wake rule (empty namespace).
+		{Source: "github", Type: "label_added", Wakeup: true},
+		// reviewbot-namespace create rule.
+		{
+			Source:    "github",
+			Type:      "label_added",
+			Namespace: "reviewbot",
+			Create:    &model.CreateTaskAction{Workspace: "default", Runner: "r"},
+		},
+	}))
+	r := &eventrouter.Router{Log: slog.Default(), Store: s}
+
+	// Act
+	n, err := r.Route(t.Context(), eventrouter.InputEvent{
+		Source: "github",
+		Type:   "label_added",
+		URL:    url,
+		UserID: org.UserID,
+		Attrs:  eventrouter.Attrs{"label": {"reviewbot"}},
+	})
+
+	// Assert: one woken (default namespace) + one created (reviewbot namespace).
+	assert.NilError(t, err)
+	assert.Equal(t, n, 2)
+
+	// The default subscriber was woken by the default-namespace rule.
+	updated, err := s.GetTask(t.Context(), nil, implementer.ID, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, updated.Status, model.TaskStatusPending)
+
+	// A reviewer was created in the reviewbot namespace.
+	tasks, err := s.ListTasks(t.Context(), nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(tasks), 2)
+	var reviewer *model.Task
+	for _, tk := range tasks {
+		if tk.ID != implementer.ID {
+			reviewer = tk
+		}
+	}
+	assert.Assert(t, reviewer != nil)
+	assert.Equal(t, reviewer.Namespace, "reviewbot")
+	assert.Equal(t, reviewer.Status, model.TaskStatusPending)
+}
+
 func TestRouteOnRouteOutcome(t *testing.T) {
 	t.Parallel()
 
