@@ -10,11 +10,15 @@ import {
   listOrgMembers,
   listKeys,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { useNotificationSSE } from '@/lib/services'
-import { notifyTimelineFollowers } from '@/lib/timeline-follow'
+import { useNotificationSSE, useTimelineFollowers } from '@/lib/services'
+import type { TimelineFollowers } from '@/lib/timeline-follow'
 import type { Notification, NotificationResource } from '@/lib/notification-sse'
 
-function invalidateResource(qc: QueryClient, r: NotificationResource) {
+function invalidateResource(
+  qc: QueryClient,
+  timelineFollowers: TimelineFollowers,
+  r: NotificationResource,
+) {
   console.debug('[sse] invalidate', r)
   switch (r.type) {
     case 'task':
@@ -35,7 +39,7 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
       // timeline is an append-only bidirectional infinite query, so instead of
       // invalidating (which would re-fetch every loaded page), drive its
       // live-follow: fetch only the newer page and append it at the tail.
-      notifyTimelineFollowers(String(r.id))
+      timelineFollowers.notify(String(r.id))
       break
     case 'task_links':
       qc.invalidateQueries({
@@ -78,23 +82,28 @@ function invalidateResource(qc: QueryClient, r: NotificationResource) {
   }
 }
 
-function handleNotification(qc: QueryClient, n: Notification) {
+function handleNotification(
+  qc: QueryClient,
+  timelineFollowers: TimelineFollowers,
+  n: Notification,
+) {
   console.debug('[sse] notification', n)
   if (n.type === 'ready') {
     return
   }
   for (const r of n.resources ?? []) {
-    invalidateResource(qc, r)
+    invalidateResource(qc, timelineFollowers, r)
   }
 }
 
 export function useOrgSSE() {
   const queryClient = useQueryClient()
   const sse = useNotificationSSE()
+  const timelineFollowers = useTimelineFollowers()
 
   useEffect(() => {
     const removeNotification = sse.addNotificationListener((n) => {
-      handleNotification(queryClient, n)
+      handleNotification(queryClient, timelineFollowers, n)
     })
     const removeReconnect = sse.addReconnectListener(() => {
       queryClient.invalidateQueries()
@@ -103,5 +112,5 @@ export function useOrgSSE() {
       removeNotification()
       removeReconnect()
     }
-  }, [queryClient, sse])
+  }, [queryClient, sse, timelineFollowers])
 }

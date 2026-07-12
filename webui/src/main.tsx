@@ -8,6 +8,7 @@ import { routeTree } from './routeTree.gen'
 import { AuthTransport } from './lib/transport'
 import { NotificationSSE } from './lib/notification-sse'
 import { ShellSessions } from './lib/shell-sessions'
+import { TimelineFollowers } from './lib/timeline-follow'
 import { ServicesProvider } from './lib/services'
 import { createParseSearch, createStringifySearch } from './lib/search-serialization'
 import './index.css'
@@ -17,6 +18,7 @@ const auth = new AuthTransport(clientId)
 const transport = createConnectTransport({ baseUrl: '/', fetch: auth.fetch })
 const notifications = new NotificationSSE(clientId)
 const shell = ShellSessions.fromTransport(transport)
+const timelineFollowers = new TimelineFollowers()
 
 notifications.setOrgId(auth.getOrgId())
 auth.onOrgChange((orgId) => notifications.setOrgId(orgId))
@@ -63,7 +65,7 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <ServicesProvider services={{ auth, notifications, shell }}>
+      <ServicesProvider services={{ auth, notifications, shell, timelineFollowers }}>
         <TransportProvider transport={transport}>
           <QueryClientProvider client={queryClient}>
             <RouterProvider router={router} />
