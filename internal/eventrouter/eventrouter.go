@@ -117,6 +117,17 @@ type RouteMatch struct {
 	RuleDefault bool
 }
 
+// ProtoRuleIndex returns the rule index as reported over the wire. A shipped
+// default match has no configured position, so it reports the -1 sentinel
+// rather than its index within the defaults; a configured match reports its
+// RuleIndex.
+func (m RouteMatch) ProtoRuleIndex() int32 {
+	if m.RuleDefault {
+		return -1
+	}
+	return int32(m.RuleIndex)
+}
+
 // Plan evaluates routing rules for the event and returns one RouteMatch per org
 // whose rules matched, without any side effects and without touching links. It
 // evaluates every org the event belongs to — the same set Route applies.
