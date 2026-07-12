@@ -89,6 +89,7 @@ func TestGetMyTask(t *testing.T) {
 		"name":      "test task",
 		"status":    "UNSPECIFIED",
 		"workspace": "",
+		"namespace": "",
 		"url":       "",
 		"instructions": []any{
 			map[string]any{"text": "do something", "url": "https://example.com"},

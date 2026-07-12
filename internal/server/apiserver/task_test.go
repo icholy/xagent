@@ -329,6 +329,53 @@ func TestListTasks_Pagination(t *testing.T) {
 	assert.Equal(t, page2.NextPageToken, "")
 }
 
+func TestCreateTask_Namespace(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	// Act
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Namespaced Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+		Namespace: "reviewbot",
+	})
+
+	// Assert: the response carries the namespace...
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Task.Namespace, "reviewbot")
+
+	// ...and it is persisted, readable back on the task.
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: resp.Task.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.Namespace, "reviewbot")
+}
+
+func TestCreateTask_DefaultNamespace(t *testing.T) {
+	t.Parallel()
+	// Arrange
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	// Act: no namespace set — the default (empty) namespace.
+	resp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
+		Name:      "Default Task",
+		Runner:    "test-runner",
+		Workspace: "test-workspace",
+	})
+
+	// Assert: empty namespace behaves as today.
+	assert.NilError(t, err)
+	assert.Equal(t, resp.Task.Namespace, "")
+	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: resp.Task.Id})
+	assert.NilError(t, err)
+	assert.Equal(t, getResp.Task.Namespace, "")
+}
+
 func TestCreateTask_BadRunner(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
