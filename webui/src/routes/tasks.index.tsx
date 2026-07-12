@@ -22,8 +22,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { StatusBadge } from '@/components/status-badge'
+import { ArchivedBadge } from '@/components/archived-badge'
 import { ArchiveButton } from '@/components/archive-button'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { RelativeTime } from '@/components/relative-time'
 import { CommandBadge } from '@/components/command-badge'
 import { Plus } from 'lucide-react'
@@ -40,6 +43,8 @@ function TasksPage() {
   const orgId = useOrgId()
 
   const [pageSize, setPageSize] = useOrgLocalStorage('tasks-page-size', '20')
+  const [showArchived, setShowArchived] = useOrgLocalStorage('tasks-show-archived', 'false')
+  const archived = showArchived === 'true'
 
   // Stack of page tokens for the pages navigated past the first. The current
   // page's token is the top of the stack; an empty stack is the first page.
@@ -48,7 +53,7 @@ function TasksPage() {
 
   const { data, isLoading, error, isPlaceholderData, refetch } = useQuery(
     listTasks,
-    { pageSize: Number(pageSize), pageToken },
+    { pageSize: Number(pageSize), pageToken, archived },
     {
       placeholderData: keepPreviousData,
       refetchInterval: 60000,
@@ -59,6 +64,14 @@ function TasksPage() {
   // the first page.
   const handlePageSizeChange = (value: string) => {
     setPageSize(value)
+    setTokens([])
+  }
+
+  // Flipping the toggle invalidates the cursor stack (the token is
+  // filter-bound), so restart from the first page — exactly how page-size
+  // changes already behave.
+  const handleShowArchivedChange = (checked: boolean) => {
+    setShowArchived(checked ? 'true' : 'false')
     setTokens([])
   }
 
@@ -93,6 +106,14 @@ function TasksPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-archived"
+              checked={archived}
+              onCheckedChange={handleShowArchivedChange}
+            />
+            <Label htmlFor="show-archived">Show archived</Label>
+          </div>
           <Select value={pageSize} onValueChange={handlePageSizeChange}>
             <SelectTrigger className="w-32">
               <SelectValue />
@@ -161,16 +182,19 @@ function TaskRow({ task, onUpdate }: { task: Task; onUpdate: () => void }) {
   }
 
   return (
-    <TableRow>
+    <TableRow className={task.archived ? 'text-muted-foreground' : undefined}>
       <TableCell>
-        <Link
-          to="/tasks/$id"
-          search={{ org: orgId }}
-          params={{ id: String(task.id) }}
-          className="text-primary hover:underline"
-        >
-          {task.name || `Unnamed - ${task.id}`}
-        </Link>
+        <span className="flex items-center gap-2">
+          <Link
+            to="/tasks/$id"
+            search={{ org: orgId }}
+            params={{ id: String(task.id) }}
+            className="text-primary hover:underline"
+          >
+            {task.name || `Unnamed - ${task.id}`}
+          </Link>
+          <ArchivedBadge task={task} />
+        </span>
       </TableCell>
       <TableCell className="hidden md:table-cell">{task.runner}</TableCell>
       <TableCell className="hidden md:table-cell">{task.workspace}</TableCell>
