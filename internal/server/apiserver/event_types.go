@@ -3,11 +3,13 @@ package apiserver
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/apiauth"
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/eventrouter"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
@@ -45,21 +47,34 @@ func (s *Server) GetEventTypes(ctx context.Context, req *xagentv1.GetEventTypesR
 }
 
 // TestEvent feeds a hand-composed synthetic event into the real routing code
-// scoped to the caller's org (see proposals/draft/test-event-injection.md). This
-// is the dry-run path (OpOrgRead): it composes an InputEvent from the request,
-// runs the shared matcher (Router.Plan), and reports which rule matched and
-// whether it would wake or create — without writing any events or tasks rows.
-// Fire mode (fire=true) is a later layer; the request's fire flag is ignored
-// here and Fired is always false.
+// scoped to the caller's org (see proposals/draft/test-event-injection.md). It
+// supports two modes:
+//
+//   - Dry run (fire=false, OpOrgRead): composes an InputEvent from the request,
+//     runs the shared matcher (Router.Plan), and reports which rule matched and
+//     whether it would wake or create — without writing any events or tasks rows.
+//   - Fire (fire=true, OpOrgWrite): applies the plan for real via the shared
+//     write path (Router.Apply), waking/creating real tasks and persisting real
+//     events — no different from a webhook-born event (§3). GitHub reactions and
+//     other outbound side effects are deliberately not fired: the injected router
+//     carries no OnRouteOutcome (§5).
 //
 // The request is not validated against the schema registry: attrs pass through
 // as-is, and an unknown source/type/attr simply yields no match rather than an
-// error. Task/link resolution is intentionally skipped — the report is derived
-// from the matched rule alone.
+// error. For a dry run, task/link resolution is skipped — the report is derived
+// from the matched rule alone; firing resolves links so it can wake existing
+// subscribed tasks.
 func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) (*xagentv1.TestEventResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpOrgRead) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read org"))
+	// Fire mutates (wakes/creates tasks), so it needs OpOrgWrite — the same scope
+	// as editing rules; a dry run is a read-only simulation and needs only
+	// OpOrgRead (§4).
+	op := authscope.OpOrgRead
+	if req.Fire {
+		op = authscope.OpOrgWrite
+	}
+	if !caller.Scopes.Allow(op) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot access org"))
 	}
 	if s.router == nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("event router not configured"))
@@ -92,21 +107,44 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 	}
 
 	// Plan is the shared read-only matcher — running it (not a parallel simulator)
-	// is what guarantees the dry-run report agrees with what firing would do. No
-	// OnRouteOutcome: dry run never applies anything.
+	// is what guarantees the dry-run report agrees with what firing would do.
 	matches, err := s.router.Plan(ctx, input)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	resp := &xagentv1.TestEventResponse{Fired: false}
-	for _, match := range matches {
-		// Scope to the caller's org (§4): Plan evaluates every org the caller is a
-		// member of, but a test event is explicitly about the one org the operator
-		// is looking at.
-		if match.OrgID == caller.OrgID {
-			resp.Matches = append(resp.Matches, match.Proto())
+	// Scope to the caller's org (§4): Plan evaluates every org the caller is a
+	// member of, but a test event is explicitly about the one org the operator is
+	// looking at, and firing must only touch that org's tasks.
+	matches = slices.DeleteFunc(matches, func(m eventrouter.RouteMatch) bool {
+		return m.OrgID != caller.OrgID
+	})
+
+	resp := &xagentv1.TestEventResponse{
+		Fired:   req.Fire,
+		Matches: model.ProtoMap(matches),
+	}
+	if !req.Fire {
+		return resp, nil
+	}
+
+	// Fire: apply the scoped matches for real through the shared write path. The
+	// injected router carries no OnRouteOutcome, so this wakes/creates tasks and
+	// persists events (with the composed Details on each ExternalPayload) but
+	// fires no GitHub reaction or other outbound side effect (§5). A fired event
+	// is an ordinary event — nothing marks it as synthetic (§3).
+	outcomes, err := s.router.Apply(ctx, input, matches)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	for i, outcome := range outcomes {
+		// outcomes align 1:1 with scoped/resp.Matches. Report the rows written:
+		// created task ids (create path only) and every external event id (both
+		// wake and create paths).
+		if outcome.Created {
+			resp.Matches[i].CreatedTaskIds = outcome.TaskIDs
 		}
+		resp.Matches[i].EventIds = outcome.EventIDs
 	}
 
 	return resp, nil
