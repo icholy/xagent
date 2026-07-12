@@ -99,17 +99,15 @@ func (s *Server) TestEvent(ctx context.Context, req *xagentv1.TestEventRequest) 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	var pbMatches []*xagentv1.TestEventMatch
+	resp := &xagentv1.TestEventResponse{Fired: false}
 	for _, match := range matches {
 		// Scope to the caller's org (§4): Plan evaluates every org the caller is a
 		// member of, but a test event is explicitly about the one org the operator
 		// is looking at.
-		if match.OrgID != caller.OrgID {
-			continue
+		if match.OrgID == caller.OrgID {
+			resp.Matches = append(resp.Matches, match.Proto())
 		}
-
-		pbMatches = append(pbMatches, match.Proto())
 	}
 
-	return &xagentv1.TestEventResponse{Matches: pbMatches, Fired: false}, nil
+	return resp, nil
 }
