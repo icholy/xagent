@@ -21,8 +21,9 @@ func NewBiSource(rows []int, forwardOnly bool) *SourceMock[int, int] {
 	sorted := slices.Clone(rows)
 	slices.Sort(sorted)
 	return &SourceMock[int, int]{
-		QueryFunc: func(_ context.Context, cursor *int, backward bool, limit int) ([]int, error) {
-			if backward {
+		QueryFunc: func(_ context.Context, token Token[int], limit int) ([]int, error) {
+			cursor := token.Cursor
+			if token.Backward {
 				if forwardOnly {
 					return nil, ErrUnsupportedDirection
 				}

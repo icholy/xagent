@@ -93,18 +93,18 @@ type taskSource struct {
 // The task list is not followed, so backward is unsupported: List never asks for
 // it (the RPC exposes no newer token to resubmit), and the guard is only reached
 // if a client hand-crafts a backward token.
-func (src taskSource) Query(ctx context.Context, cursor *taskCursor, backward bool, limit int) ([]*model.Task, error) {
-	if backward {
+func (src taskSource) Query(ctx context.Context, token pagination.Token[taskCursor], limit int) ([]*model.Task, error) {
+	if token.Backward {
 		return nil, pagination.ErrUnsupportedDirection
 	}
 	args := sqlc.ListTasksPageParams{
 		OrgID:     src.params.OrgID,
-		UseCursor: cursor != nil,
+		UseCursor: token.Cursor != nil,
 		PageLimit: int32(limit), // int32 only at the sqlc boundary
 	}
-	if cursor != nil {
-		args.CursorCreatedAt = cursor.CreatedAt
-		args.CursorID = cursor.ID
+	if token.Cursor != nil {
+		args.CursorCreatedAt = token.Cursor.CreatedAt
+		args.CursorID = token.Cursor.ID
 	}
 	rows, err := src.store.q(src.tx).ListTasksPage(ctx, args)
 	if err != nil {

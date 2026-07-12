@@ -65,9 +65,21 @@ type Page[T any] struct {
 	BackwardToken string
 }
 
-// Source walks a keyset in either direction and maps a row to a cursor. Query's
-// backward argument — the same bit the page token carries — selects the walk:
-// false (default) is the primary/forward walk, true its reverse.
+// Token is what an opaque page token encodes and the value List hands to
+// Source.Query: a boundary cursor plus the direction to resume the walk. A nil
+// Cursor is the newest page (the forward walk's start); Backward defaults to
+// false (the forward, primary walk). It is the JSON payload behind every base64
+// page token.
+type Token[C any] struct {
+	Cursor   *C   `json:"c,omitempty"`
+	Backward bool `json:"b,omitempty"`
+}
+
+// Source walks a keyset in either direction and maps a row to a cursor. The
+// Token it receives carries both the boundary cursor and the direction: a nil
+// Token.Cursor starts the walk at its far end, and Token.Backward — the same bit
+// the page token carries — selects the walk (false, the default, is the
+// primary/forward walk; true its reverse).
 //
 // Two invariants every Source must satisfy — List relies on these and nothing
 // more:
@@ -91,17 +103,9 @@ type Page[T any] struct {
 //
 //go:generate go tool moq -out source_moq_test.go . Source
 type Source[T, C any] interface {
-	Query(ctx context.Context, cursor *C, backward bool, limit int) ([]T, error)
+	Query(ctx context.Context, token Token[C], limit int) ([]T, error)
 	// Cursor returns the keyset of row; it is what page tokens encode.
 	Cursor(row T) C
-}
-
-// keysetToken is what an opaque page token encodes: a cursor plus the direction
-// to resume — the bit List passes to Source.Query. Backward defaults to false
-// (the forward, primary walk).
-type keysetToken[C any] struct {
-	Cursor   C    `json:"c"`
-	Backward bool `json:"b,omitempty"`
 }
 
 // List runs one page of a keyset-paginated query against src.
@@ -129,17 +133,15 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 	if size < 1 || size > cfg.Max {
 		return nil, fmt.Errorf("%w: page_size must be between 1 and %d", ErrInvalidRequest, cfg.Max)
 	}
-	var cursor *C
-	backward := false
+	var token Token[C]
 	if pageToken != "" {
-		tok, err := decode[keysetToken[C]](pageToken)
-		if err != nil {
+		var err error
+		if token, err = decode[Token[C]](pageToken); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)
 		}
-		cursor = &tok.Cursor
-		backward = tok.Backward
 	}
-	items, err := src.Query(ctx, cursor, backward, size+1)
+	backward := token.Backward
+	items, err := src.Query(ctx, token, size+1)
 	if err != nil {
 		if errors.Is(err, ErrUnsupportedDirection) {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
@@ -200,7 +202,7 @@ func List[T, C any](ctx context.Context, cfg Config, pageSize int32, pageToken s
 }
 
 func encodeToken[C any](cursor C, backward bool) (string, error) {
-	return encode(keysetToken[C]{Cursor: cursor, Backward: backward})
+	return encode(Token[C]{Cursor: &cursor, Backward: backward})
 }
 
 func encode[C any](c C) (string, error) {
