@@ -2,19 +2,21 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/xagentclient"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
+	"gotest.tools/v3/golden"
 )
 
 // testTaskVersion is the version returned by setupDriver's GetTask mock. The
@@ -406,52 +408,66 @@ func TestDriverRun_SetupCommandOutputTeed(t *testing.T) {
 	assert.Assert(t, cmp.Contains(string(got), "err-marker"))
 }
 
-func TestConfigPrompt(t *testing.T) {
-	cfg := &Config{}
-	got, err := cfg.prompt(nil)
-	assert.NilError(t, err)
-	assert.Assert(t, strings.Contains(got, "xagent:get_my_task"))
-}
-
-func TestConfigPrompt_Started(t *testing.T) {
-	// A wake with nothing pending falls back to a bare nudge — no get_my_task.
-	cfg := &Config{Started: true}
-	got, err := cfg.prompt(nil)
-	assert.NilError(t, err)
-	assert.Equal(t, got, "The task was updated. Continue.")
-}
-
-func TestConfigPrompt_StartedWithEvents(t *testing.T) {
-	// A wake with pending events injects the raw event JSON directly (each event
-	// rendered by the template's RenderEvent func and joined into an array), so
-	// the wake no longer depends on a get_my_task tool call.
+// TestConfigPromptGolden snapshots the whole rendered bootstrap prompt across
+// its branches: the first-run get_my_task bootstrap, a wake that injects the
+// pending events as a JSON array, the bare fallback when a wake has nothing
+// pending, and a wake with a workspace prompt appended.
+// Regenerate the goldens with: go test ./internal/agent/ -run TestConfigPromptGolden -update
+func TestConfigPromptGolden(t *testing.T) {
+	t.Parallel()
+	// Fixed timestamps keep the rendered createdAt fields stable across runs.
 	events := []*xagentv1.Event{
-		{Id: 42, Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{Description: "PR review requested"}}},
-		{Id: 43, Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{Text: "keep going"}}},
+		{
+			Id:        42,
+			CreatedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+			Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+				Description: "PR review requested",
+				Url:         "https://github.com/icholy/xagent/pull/1394",
+			}},
+		},
+		{
+			Id:        43,
+			CreatedAt: timestamppb.New(time.Unix(1_700_000_100, 0).UTC()),
+			Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{
+				Text: "keep going",
+				Url:  "https://github.com/icholy/xagent/issues/2",
+			}},
+		},
 	}
-	cfg := &Config{Started: true}
-	got, err := cfg.prompt(events)
-	assert.NilError(t, err)
-	assert.Assert(t, strings.Contains(got, "The task received new events:"))
-	assert.Assert(t, strings.Contains(got, "Continue working on the task."))
-	assert.Assert(t, !strings.Contains(got, "get_my_task"))
-
-	// Each event's rendered JSON is present, and the injected block parses as a
-	// JSON array of all of them (the template loops and comma-joins).
-	for _, e := range events {
-		want, err := RenderEvent(e)
-		assert.NilError(t, err)
-		assert.Assert(t, strings.Contains(got, want))
+	tests := []struct {
+		name   string
+		cfg    *Config
+		events []*xagentv1.Event
+		golden string
+	}{
+		{
+			name:   "first run bootstraps via get_my_task",
+			cfg:    &Config{},
+			golden: "prompt-first-run.golden",
+		},
+		{
+			name:   "wake injects pending events",
+			cfg:    &Config{Started: true},
+			events: events,
+			golden: "prompt-wake-events.golden",
+		},
+		{
+			name:   "wake with nothing pending falls back",
+			cfg:    &Config{Started: true},
+			golden: "prompt-wake-empty.golden",
+		},
+		{
+			name:   "wake injects events with a workspace prompt appended",
+			cfg:    &Config{Started: true, Prompt: "Custom workspace instructions."},
+			events: events,
+			golden: "prompt-wake-events-workspace.golden",
+		},
 	}
-	block := got[strings.Index(got, "["):strings.LastIndex(got, "]")+1]
-	var arr []json.RawMessage
-	assert.NilError(t, json.Unmarshal([]byte(block), &arr))
-	assert.Assert(t, cmp.Len(arr, 2))
-}
-
-func TestConfigPrompt_WorkspacePromptAppended(t *testing.T) {
-	cfg := &Config{Started: true, Prompt: "Custom workspace instructions."}
-	got, err := cfg.prompt(nil)
-	assert.NilError(t, err)
-	assert.Equal(t, got, "The task was updated. Continue.\n\nCustom workspace instructions.")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.cfg.prompt(tt.events)
+			assert.NilError(t, err)
+			golden.Assert(t, got, tt.golden)
+		})
+	}
 }
