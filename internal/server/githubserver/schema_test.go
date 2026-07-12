@@ -13,8 +13,6 @@ func TestSchemaRegistration(t *testing.T) {
 
 	def, ok := reg.EventTypeFor("github", EventTypeIssueComment)
 	assert.Assert(t, ok, "EventTypeFor(github, %q) = _, false; want hit", EventTypeIssueComment)
-	// Producers no longer register default rules.
-	assert.Assert(t, def.DefaultRules == nil, "issue_comment DefaultRules = %v, want nil", def.DefaultRules)
 
 	// AttrDefs carry GitHub-flavoured display copy declared inline per event
 	// type, so the copy speaks to this specific event (a comment's body/URL).
@@ -45,8 +43,7 @@ func TestSchemaRegistration(t *testing.T) {
 		},
 	})
 
-	// Another type also registers and ships no default rules.
-	labelDef, ok := reg.EventTypeFor("github", EventTypeLabelAdded)
+	// Another type also registers.
+	_, ok = reg.EventTypeFor("github", EventTypeLabelAdded)
 	assert.Assert(t, ok, "EventTypeFor(github, %q) = _, false; want hit", EventTypeLabelAdded)
-	assert.Assert(t, labelDef.DefaultRules == nil, "label_added DefaultRules = %v, want nil", labelDef.DefaultRules)
 }
