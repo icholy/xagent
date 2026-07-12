@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/pubsub"
 	"github.com/icholy/xagent/internal/store"
 )
@@ -117,15 +118,21 @@ type RouteMatch struct {
 	RuleDefault bool
 }
 
-// ProtoRuleIndex returns the rule index as reported over the wire. A shipped
-// default match has no configured position, so it reports the -1 sentinel
+// Proto renders the match as a TestEventMatch for the dry-run report. A shipped
+// default match has no configured position, so RuleIndex reports the -1 sentinel
 // rather than its index within the defaults; a configured match reports its
-// RuleIndex.
-func (m RouteMatch) ProtoRuleIndex() int32 {
+// RuleIndex. WouldWake/WouldCreate are derived from the matched rule alone.
+func (m RouteMatch) Proto() *xagentv1.TestEventMatch {
+	ruleIndex := int32(m.RuleIndex)
 	if m.RuleDefault {
-		return -1
+		ruleIndex = -1
 	}
-	return int32(m.RuleIndex)
+	return &xagentv1.TestEventMatch{
+		OrgId:       m.OrgID,
+		RuleIndex:   ruleIndex,
+		WouldWake:   m.Rule.Wakeup,
+		WouldCreate: m.Rule.Create != nil,
+	}
 }
 
 // Plan evaluates routing rules for the event and returns one RouteMatch per org
