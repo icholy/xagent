@@ -2,11 +2,13 @@ import { createContext, useContext, type ReactNode } from 'react'
 import type { AuthTransport } from './transport'
 import type { NotificationSSE } from './notification-sse'
 import type { ShellSessions } from './shell-sessions'
+import type { TimelineFollowers } from './timeline-follow'
 
 export interface Services {
   auth: AuthTransport
   notifications: NotificationSSE
   shell: ShellSessions
+  timelineFollowers: TimelineFollowers
 }
 
 const ServicesContext = createContext<Services | null>(null)
@@ -43,4 +45,12 @@ export function useShellSessions(): ShellSessions {
     throw new Error('useShellSessions must be used within ServicesProvider')
   }
   return s.shell
+}
+
+export function useTimelineFollowers(): TimelineFollowers {
+  const s = useContext(ServicesContext)
+  if (!s) {
+    throw new Error('useTimelineFollowers must be used within ServicesProvider')
+  }
+  return s.timelineFollowers
 }

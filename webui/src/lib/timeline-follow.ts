@@ -1,36 +1,44 @@
-// A task's timeline is a bidirectional infinite query owned by the mounted
-// tasks.$id route (see use-task-timeline). Live `task_logs` signals arrive on
-// the org-wide SSE stream (use-org-sse), which can't reach that query's
-// fetchNextPage directly. A mounted timeline registers a follow callback here
-// keyed by task id; the SSE handler looks it up and fires it, so a signal
-// fetches only the newer page (an append) instead of invalidating and
-// re-fetching the whole stream.
+// TimelineFollowers bridges the org-wide SSE stream to the task timelines
+// mounted in the React tree. A task's timeline (see use-task-timeline) is a
+// bidirectional infinite query whose fetchNextPage lives inside a component; the
+// org-wide SSE stream (use-org-sse) — where live task_logs signals arrive —
+// can't reach it directly. A mounted timeline registers a follow callback here
+// keyed by task id, and the SSE handler calls notify() so a signal fetches only
+// the newer page (an append) instead of invalidating and re-fetching the whole
+// stream.
+//
+// It is created once at the app root and injected via the Services context,
+// alongside AuthTransport, NotificationSSE, and ShellSessions.
 
 type FollowFn = () => void
 
-const followers = new Map<string, Set<FollowFn>>()
+export class TimelineFollowers {
+  private readonly followers = new Map<string, Set<FollowFn>>()
 
-// registerTimelineFollower adds follow for taskId and returns an unregister
-// function. A Set allows more than one mount of the same task (e.g. during a
-// route transition) without either clobbering the other.
-export function registerTimelineFollower(taskId: string, follow: FollowFn): () => void {
-  let set = followers.get(taskId)
-  if (!set) {
-    set = new Set()
-    followers.set(taskId, set)
+  // register adds follow for taskId and returns an unregister function. A Set
+  // allows more than one mount of the same task (a StrictMode double-mount, or a
+  // route transition) without either clobbering the other.
+  register(taskId: string, follow: FollowFn): () => void {
+    let set = this.followers.get(taskId)
+    if (!set) {
+      set = new Set()
+      this.followers.set(taskId, set)
+    }
+    set.add(follow)
+    return () => {
+      const s = this.followers.get(taskId)
+      if (!s) return
+      s.delete(follow)
+      if (s.size === 0) this.followers.delete(taskId)
+    }
   }
-  set.add(follow)
-  return () => {
-    set.delete(follow)
-    if (set.size === 0) followers.delete(taskId)
-  }
-}
 
-// notifyTimelineFollowers fires every follow registered for taskId. It is a
-// no-op when the task's timeline isn't mounted — there is nothing cached to
-// update, and the timeline opens at the tail when next viewed.
-export function notifyTimelineFollowers(taskId: string): void {
-  const set = followers.get(taskId)
-  if (!set) return
-  for (const follow of set) follow()
+  // notify fires every follow registered for taskId. It is a no-op when the
+  // task's timeline isn't mounted — there is nothing cached to update, and the
+  // timeline opens at the tail when next viewed.
+  notify(taskId: string): void {
+    const set = this.followers.get(taskId)
+    if (!set) return
+    for (const follow of set) follow()
+  }
 }

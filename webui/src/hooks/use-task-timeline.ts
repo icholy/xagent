@@ -4,7 +4,7 @@ import { useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { listEventsByTask } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { ListEventsByTaskResponse } from '@/gen/xagent/v1/xagent_pb'
 import { eventsToTimeline } from '@/lib/timeline'
-import { registerTimelineFollower } from '@/lib/timeline-follow'
+import { useTimelineFollowers } from '@/lib/services'
 
 // The timeline is append-only, so every page is an immutable ascending window
 // over a fixed id range. That lets us open at the tail, prepend older pages on
@@ -32,6 +32,7 @@ function dropTrailingEmpty(
 export function useTaskTimeline(taskId: bigint) {
   const transport = useTransport()
   const queryClient = useQueryClient()
+  const timelineFollowers = useTimelineFollowers()
 
   // The page param (pageToken) must be present in the input; its value here is
   // the initial page param — empty selects the newest (tail) page. Memoized so
@@ -72,7 +73,10 @@ export function useTaskTimeline(taskId: bigint) {
 
   // A task_logs SSE signal for this task arrives on the org-wide stream
   // (use-org-sse). Register so that signal drives our live-follow directly.
-  useEffect(() => registerTimelineFollower(String(taskId), () => void follow()), [taskId, follow])
+  useEffect(
+    () => timelineFollowers.register(String(taskId), () => void follow()),
+    [timelineFollowers, taskId, follow],
+  )
 
   // Every page is ascending, so the loaded pages flatten into one ascending
   // stream — no reversal.
