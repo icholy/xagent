@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import type { DescMethodUnary } from '@bufbuild/protobuf'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { createConnectQueryKey } from '@connectrpc/connect-query'
 import {
@@ -9,7 +10,6 @@ import {
   listWorkspaces,
   listOrgMembers,
   listKeys,
-  listEventsByTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import { useNotificationSSE, useTimelineFollowers } from '@/lib/services'
 import type { TimelineFollowers } from '@/lib/timeline-follow'
@@ -83,37 +83,31 @@ function invalidateResource(
   }
 }
 
-// The task timeline is a bidirectional infinite query over immutable
-// append-only pages (see use-task-timeline). Its connect-query key carries the
-// input (task id) and transport, but every mounted timeline shares the same
-// service/method/cardinality, so matching on those three exempts them all.
-const timelineProps = (
-  createConnectQueryKey({ schema: listEventsByTask, cardinality: 'infinite' }) as [
-    string,
-    { serviceName: string; methodName?: string; cardinality?: string },
-  ]
-)[1]
+// The finite query families a reconnect resyncs. While the SSE was disconnected
+// we missed change notifications, so everything cached may be stale — these
+// mirror the families invalidateResource refreshes per notification. The
+// append-only listEventsByTask timeline is deliberately absent: refetching an
+// invalidated infinite query re-fetches every loaded page, and reconnects happen
+// routinely (network blips, tab background→foreground), so it catches up via a
+// single tail-follow (notifyAll) instead.
+const RECONNECT_SCHEMAS: DescMethodUnary[] = [
+  getTaskDetails,
+  listTasks,
+  listExternalEvents,
+  getEvent,
+  listWorkspaces,
+  listOrgMembers,
+  listKeys,
+]
 
-function isTimelineQueryKey(queryKey: unknown): boolean {
-  if (!Array.isArray(queryKey) || queryKey[0] !== 'connect-query') return false
-  const props = queryKey[1] as
-    { serviceName?: string; methodName?: string; cardinality?: string } | undefined
-  return (
-    props?.serviceName === timelineProps.serviceName &&
-    props?.methodName === timelineProps.methodName &&
-    props?.cardinality === timelineProps.cardinality
-  )
-}
-
-// handleReconnect resyncs after the notification SSE drops and comes back: while
-// disconnected we miss change notifications, so everything cached may be stale.
-// It invalidates every query EXCEPT the append-only task timelines — refetching
-// an invalidated infinite query re-fetches every loaded page, and since
-// reconnects happen routinely (network blips, tab background→foreground) that
-// would refetch the whole loaded timeline on each one. Instead the timelines
-// catch up via a single tail-follow driven by notifyAll().
+// handleReconnect resyncs after the notification SSE drops and comes back. It
+// invalidates each finite family by allow-list (an input-less key prefix-matches
+// every cached instance of that family), then drives every mounted timeline's
+// tail-follow. The timeline is never invalidated by construction.
 export function handleReconnect(qc: QueryClient, timelineFollowers: TimelineFollowers) {
-  qc.invalidateQueries({ predicate: (query) => !isTimelineQueryKey(query.queryKey) })
+  for (const schema of RECONNECT_SCHEMAS) {
+    qc.invalidateQueries({ queryKey: createConnectQueryKey({ schema, cardinality: 'finite' }) })
+  }
   timelineFollowers.notifyAll()
 }
 
