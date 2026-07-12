@@ -3168,7 +3168,9 @@ type ListEventsByTaskRequest struct {
 	TaskId   int64                  `protobuf:"varint,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	PageSize int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"` // Max events per page (default 50, max 200). 0 with an empty
 	// page_token selects the legacy unpaged path (all events, ascending).
-	PageToken     string `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Opaque bidirectional cursor (encodes a boundary id + direction).
+	PageToken string `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"` // Opaque bidirectional cursor (encodes a boundary id + direction).
+	// Empty returns the newest page.
+	Types         []string `protobuf:"bytes,4,rep,name=types,proto3" json:"types,omitempty"` // Event-type filter (e.g. "instruction", "external"); empty = all types.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3222,6 +3224,13 @@ func (x *ListEventsByTaskRequest) GetPageToken() string {
 		return x.PageToken
 	}
 	return ""
+}
+
+func (x *ListEventsByTaskRequest) GetTypes() []string {
+	if x != nil {
+		return x.Types
+	}
+	return nil
 }
 
 type ListEventsByTaskResponse struct {
@@ -6547,12 +6556,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x05event\x18\x01 \x01(\v2\x10.xagent.v1.EventR\x05event\"$\n" +
 	"\x12DeleteEventRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x15\n" +
-	"\x13DeleteEventResponse\"n\n" +
+	"\x13DeleteEventResponse\"\x84\x01\n" +
 	"\x17ListEventsByTaskRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\x03R\x06taskId\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x03 \x01(\tR\tpageToken\"\xa8\x01\n" +
+	"page_token\x18\x03 \x01(\tR\tpageToken\x12\x14\n" +
+	"\x05types\x18\x04 \x03(\tR\x05types\"\xa8\x01\n" +
 	"\x18ListEventsByTaskResponse\x12(\n" +
 	"\x06events\x18\x01 \x03(\v2\x10.xagent.v1.EventR\x06events\x12&\n" +
 	"\x0fprev_page_token\x18\x02 \x01(\tR\rprevPageToken\x12&\n" +

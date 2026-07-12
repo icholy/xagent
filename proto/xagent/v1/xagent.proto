@@ -423,6 +423,8 @@ message ListEventsByTaskRequest {
                           // page_token selects the legacy unpaged path (all events, ascending).
   string page_token = 3;  // Opaque bidirectional cursor (encodes a boundary id + direction).
                           // Empty returns the newest page.
+  repeated string types = 4;  // Event-type filter (e.g. "instruction", "external"); empty = all types.
+                              // Values match the payload arm names / db `type` column.
 }
 
 message ListEventsByTaskResponse {
