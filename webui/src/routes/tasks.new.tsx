@@ -30,6 +30,7 @@ function NewTaskPage() {
   const [runner, setRunner] = useOrgLocalStorage('xagent-last-runner', '')
   const [workspace, setWorkspace] = useOrgLocalStorage('xagent-last-workspace', '')
   const [instruction, setInstruction] = useState('')
+  const [namespace, setNamespace] = useState('')
   const [autoArchive, setAutoArchive] = useState<string>('') // empty = never
 
   const { data: workspacesData } = useQuery(listWorkspaces, {})
@@ -68,6 +69,7 @@ function NewTaskPage() {
       runner: runner.trim(),
       workspace: workspace.trim(),
       instructions: [{ text: instruction.trim(), url: '' }],
+      namespace: namespace.trim(),
       autoArchive: durationFromHours(autoArchive),
     })
   }
@@ -136,6 +138,20 @@ function NewTaskPage() {
                 rows={4}
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="namespace">Namespace (optional)</Label>
+              <Input
+                id="namespace"
+                placeholder="Default namespace"
+                value={namespace}
+                onChange={(e) => setNamespace(e.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                Partitions subscription matching for routing rules. Leave empty for the default
+                namespace.
+              </p>
             </div>
 
             <div className="space-y-2">

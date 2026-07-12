@@ -103,6 +103,9 @@ export interface RoutingRuleFormValues {
   // need not have linked their GitHub/Jira accounts). Defaults to false —
   // rules are member-only unless explicitly opted in.
   public: boolean
+  // Partitions subscription matching. Empty is the default namespace — the
+  // behavior every existing rule already has.
+  namespace: string
   createTask: boolean
   createWorkspace: string
   createRunner: string
@@ -118,6 +121,7 @@ export const emptyRoutingRule: RoutingRuleFormValues = {
   conditions: [],
   wakeup: true,
   public: false,
+  namespace: '',
   createTask: false,
   createWorkspace: '',
   createRunner: '',
@@ -132,6 +136,7 @@ export function formValuesFromRoutingRule(rule: RoutingRule): RoutingRuleFormVal
     conditions: rule.conditions.map((c) => ({ attr: c.attr, op: c.op, value: c.value })),
     wakeup: rule.wakeup,
     public: rule.public,
+    namespace: rule.namespace,
     createTask: rule.create !== undefined,
     createWorkspace: rule.create?.workspace ?? '',
     createRunner: rule.create?.runner ?? '',
@@ -152,6 +157,7 @@ export function buildRoutingRule(values: RoutingRuleFormValues): RoutingRule {
       .map((c) => ({ attr: c.attr, op: c.op, value: c.value })),
     wakeup: values.wakeup,
     public: values.public,
+    namespace: values.namespace.trim(),
     create: values.createTask
       ? {
           workspace: values.createWorkspace,
