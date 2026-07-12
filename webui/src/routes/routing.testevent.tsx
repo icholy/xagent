@@ -5,8 +5,8 @@ import { TestEventForm } from '@/components/test-event-form'
 import { useOrgId } from '@/hooks/use-org-id'
 import { ArrowLeft } from 'lucide-react'
 
-export const Route = createFileRoute('/routing/test')({
-  staticData: { orgSwitchRedirect: '/routing/test' },
+export const Route = createFileRoute('/routing/testevent')({
+  staticData: { orgSwitchRedirect: '/routing/testevent' },
   component: TestEventPage,
 })
 

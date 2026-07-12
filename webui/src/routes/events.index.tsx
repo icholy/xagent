@@ -211,7 +211,7 @@ function RoutingRulesCard() {
         </CardDescription>
         <CardAction>
           <div className="flex gap-2">
-            <Link to="/routing/test" search={{ org: orgId }}>
+            <Link to="/routing/testevent" search={{ org: orgId }}>
               <Button variant="outline">
                 <FlaskConical className="h-4 w-4" />
                 Test
