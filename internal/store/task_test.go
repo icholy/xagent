@@ -64,18 +64,13 @@ func TestListTasksPage_ActiveOnly(t *testing.T) {
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 
-	// teststore.CreateTask doesn't expose archived, so create directly.
-	create := func(archived bool) *model.Task {
-		task := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: archived}
-		assert.NilError(t, s.CreateTask(t.Context(), nil, task))
-		return task
-	}
-
 	// Interleave active and archived; keyset order is newest-created first.
-	a := create(false)
-	create(true)
-	c := create(false)
-	create(true)
+	a := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, a))
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}))
+	c := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, c))
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}))
 
 	page, err := s.ListTasksPage(t.Context(), nil, store.ListTasksPageParams{OrgID: org.OrgID})
 	assert.NilError(t, err)
@@ -89,16 +84,14 @@ func TestListTasksPage_IncludeArchived(t *testing.T) {
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 
-	create := func(archived bool) *model.Task {
-		task := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: archived}
-		assert.NilError(t, s.CreateTask(t.Context(), nil, task))
-		return task
-	}
-
-	a := create(false)
-	b := create(true)
-	c := create(false)
-	d := create(true)
+	a := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, a))
+	b := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, b))
+	c := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, c))
+	d := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, d))
 
 	page, err := s.ListTasksPage(t.Context(), nil, store.ListTasksPageParams{
 		OrgID:    org.OrgID,
@@ -115,15 +108,12 @@ func TestListTasksPage_ArchivedKeysetPaging(t *testing.T) {
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 
-	create := func(archived bool) *model.Task {
-		task := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: archived}
-		assert.NilError(t, s.CreateTask(t.Context(), nil, task))
-		return task
-	}
-
-	a := create(false)
-	b := create(true)
-	c := create(false)
+	a := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, a))
+	b := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, b))
+	c := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}
+	assert.NilError(t, s.CreateTask(t.Context(), nil, c))
 
 	// Page size 1 forces the keyset cursor to walk archived+active together.
 	var got []int64
@@ -150,15 +140,9 @@ func TestListTasksPage_TokenBindsFilter(t *testing.T) {
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 
-	create := func(archived bool) *model.Task {
-		task := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: archived}
-		assert.NilError(t, s.CreateTask(t.Context(), nil, task))
-		return task
-	}
-
 	// Two archived-included rows so the first page mints a next token.
-	create(true)
-	create(true)
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}))
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: true}))
 
 	archivedPage, err := s.ListTasksPage(t.Context(), nil, store.ListTasksPageParams{
 		OrgID:    org.OrgID,
@@ -179,8 +163,8 @@ func TestListTasksPage_TokenBindsFilter(t *testing.T) {
 
 	// And the reverse: an active-minted token replayed under archived=true.
 	// Two active rows so the active-only first page also mints a next token.
-	create(false)
-	create(false)
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}))
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}))
 	activePage, err := s.ListTasksPage(t.Context(), nil, store.ListTasksPageParams{
 		OrgID:    org.OrgID,
 		PageSize: 1,
@@ -202,14 +186,8 @@ func TestListTasksPage_DefaultTokenWireCompatible(t *testing.T) {
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 
-	create := func(archived bool) *model.Task {
-		task := &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID, Archived: archived}
-		assert.NilError(t, s.CreateTask(t.Context(), nil, task))
-		return task
-	}
-
-	create(false)
-	create(false)
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}))
+	assert.NilError(t, s.CreateTask(t.Context(), nil, &model.Task{Runner: "r", Workspace: "w", Status: model.TaskStatusCompleted, OrgID: org.OrgID}))
 
 	page, err := s.ListTasksPage(t.Context(), nil, store.ListTasksPageParams{
 		OrgID:    org.OrgID,
