@@ -72,32 +72,18 @@ func formatEventTime(ts *timestamppb.Timestamp) string {
 }
 
 // externalLabel builds the "{source} · {type}" label line for an external event
-// (from #1410). The source is display-name-cased (github → GitHub) with a raw
-// fallback; either field is omitted when empty, so a pre-#1410 event with both
-// empty yields "" and the caller drops the label line entirely.
+// (from #1410). The source and type are used verbatim; either field is omitted
+// when empty, so a pre-#1410 event with both empty yields "" and the caller
+// drops the label line entirely.
 func externalLabel(source, eventType string) string {
 	var parts []string
 	if source != "" {
-		parts = append(parts, sourceDisplayName(source))
+		parts = append(parts, source)
 	}
 	if eventType != "" {
 		parts = append(parts, eventType)
 	}
 	return strings.Join(parts, " · ")
-}
-
-// sourceDisplayName maps an external source string onto its display name,
-// mirroring the web UI's externalSourceStyle. Unknown sources fall back to the
-// raw string.
-func sourceDisplayName(source string) string {
-	switch strings.ToLower(source) {
-	case "github":
-		return "GitHub"
-	case "jira":
-		return "Jira"
-	default:
-		return source
-	}
 }
 
 // renderDetails marshals an external event's opaque details map as one

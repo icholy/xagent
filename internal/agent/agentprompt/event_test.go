@@ -72,7 +72,7 @@ func TestRenderEvent(t *testing.T) {
 				}},
 			},
 			want: "### icholy commented on driver.go — 2023-11-14 22:20 UTC\n" +
-				"GitHub · pull_request_review_comment\n" +
+				"github · pull_request_review_comment\n" +
 				"Source: https://github.com/icholy/xagent/pull/1394#discussion_r512\n" +
 				"\n" +
 				"This nil check needs a test before we merge — can you add one that covers the wake path?\n" +
