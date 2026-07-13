@@ -47,27 +47,19 @@ func RenderEvent(event *xagentv1.Event) (string, error) {
 	return string(out), nil
 }
 
-// firstRunFraming frames the injected brief: it tells the model this is the
-// first run and its full context follows inline, so it need not call
-// get_my_task to begin.
-const firstRunFraming = "This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin."
-
-// RenderBrief renders a task's full brief for injection into the first-run
-// prompt. It reads the event-native GetTaskDetailsResponse directly — the thin
-// task header, the raw event stream, and the links — and renders a header, the
-// first-run framing sentence, the events as a flat renderEvent list, and the
-// links. It no longer emits the flattened taskDetailsToMap JSON blob or the
-// duplicated instructions projection; the instruction appears once, as an
-// instruction event through renderEvent.
+// RenderBrief renders the body of a task's first-run brief: the raw event
+// stream as a flat renderEvent list followed by the links. It reads the
+// event-native GetTaskDetailsResponse directly and no longer emits the
+// flattened taskDetailsToMap JSON blob or the duplicated instructions
+// projection; the instruction appears once, as an instruction event through
+// renderEvent. The header and the framing sentence are rendered by PROMPT.md
+// (via renderHeader and a template literal) so the prose lives in the template.
 //
-// It is nil-safe: a nil resp (or nil task) renders zero values through the
-// proto getters. Events with no set arm and empty link/event slices contribute
-// nothing.
+// It is nil-safe: a nil resp renders an empty string. Events with no set arm
+// and empty link/event slices contribute nothing, so the returned blocks are
+// always joined by a single blank line with no stray whitespace.
 func RenderBrief(resp *xagentv1.GetTaskDetailsResponse) string {
-	blocks := []string{
-		renderHeader(resp.GetTask()),
-		firstRunFraming,
-	}
+	var blocks []string
 	for _, event := range resp.GetEvents() {
 		if block := renderEvent(event); block != "" {
 			blocks = append(blocks, block)
@@ -117,9 +109,10 @@ var promptText string
 
 var promptTemplate = template.Must(
 	template.New("prompt").Funcs(template.FuncMap{
-		"RenderEvent": RenderEvent,
-		"renderEvent": renderEvent,
-		"RenderBrief": RenderBrief,
+		"RenderEvent":  RenderEvent,
+		"renderEvent":  renderEvent,
+		"renderHeader": renderHeader,
+		"RenderBrief":  RenderBrief,
 	}).Parse(promptText),
 )
 
