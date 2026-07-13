@@ -12,6 +12,10 @@ The task was updated. Continue.
 {{- end -}}
 {{- else -}}
 {{- if .TaskDetails -}}
+{{ renderHeader .TaskDetails.Task }}
+
+This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
+
 {{ RenderBrief .TaskDetails }}
 
 If the task does not have a name, use xagent:update_my_task to set one.
