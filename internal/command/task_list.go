@@ -41,48 +41,15 @@ var TaskListCommand = &cli.Command{
 			return fmt.Errorf("failed to list tasks: %w", err)
 		}
 
+		// ListTasks already returns the fat Task per row, so render the header
+		// straight from the response — no per-task detail fetch.
 		marshalOpts := protojson.MarshalOptions{Indent: "  "}
-
-		// Get detailed information for each task and flatten the output
-		result := make([]map[string]any, 0, len(resp.Tasks))
-		for _, task := range resp.Tasks {
-			details, err := client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
-				Id: task.Id,
-			})
+		result := make([]json.RawMessage, len(resp.Tasks))
+		for i, task := range resp.Tasks {
+			result[i], err = marshalOpts.Marshal(task)
 			if err != nil {
-				return fmt.Errorf("failed to get details for task %d: %w", task.Id, err)
+				return fmt.Errorf("failed to marshal task %d: %w", task.Id, err)
 			}
-
-			// Instructions are instruction events in the brief, not a task field.
-			var instructions []json.RawMessage
-			for _, event := range details.GetEvents() {
-				inst := event.GetInstruction()
-				if inst == nil {
-					continue
-				}
-				data, _ := marshalOpts.Marshal(inst)
-				instructions = append(instructions, data)
-			}
-
-			links := make([]json.RawMessage, len(details.GetLinks()))
-			for i, link := range details.GetLinks() {
-				links[i], _ = marshalOpts.Marshal(link)
-			}
-
-			events := make([]json.RawMessage, len(details.GetEvents()))
-			for i, event := range details.GetEvents() {
-				events[i], _ = marshalOpts.Marshal(event)
-			}
-
-			// Create flattened structure
-			result = append(result, map[string]any{
-				"id":           details.Task.Id,
-				"name":         details.Task.Name,
-				"status":       details.Task.Status,
-				"instructions": instructions,
-				"links":        links,
-				"events":       events,
-			})
 		}
 
 		enc := json.NewEncoder(os.Stdout)
