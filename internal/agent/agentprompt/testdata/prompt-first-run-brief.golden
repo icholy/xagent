@@ -1,0 +1,59 @@
+Here is your task brief:
+
+{
+  "events": [
+    {
+      "id": "43",
+      "createdAt": "2023-11-14T22:15:00Z",
+      "instruction": {
+        "text": "Implement the first-run brief.",
+        "url": "https://github.com/icholy/xagent/issues/1398"
+      }
+    },
+    {
+      "id": "42",
+      "createdAt": "2023-11-14T22:13:20Z",
+      "external": {
+        "description": "PR review requested",
+        "url": "https://github.com/icholy/xagent/pull/1394"
+      }
+    }
+  ],
+  "id": 1302,
+  "instructions": [
+    {
+      "text": "Implement the first-run brief.",
+      "url": "https://github.com/icholy/xagent/issues/1398"
+    }
+  ],
+  "links": [
+    {
+      "id": "7",
+      "taskId": "1302",
+      "relevance": "the PR this task opened",
+      "url": "https://github.com/icholy/xagent/pull/1394",
+      "title": "feat(agent): first-run brief",
+      "subscribe": true,
+      "createdAt": "2023-11-14T22:14:10Z"
+    }
+  ],
+  "name": "first-run-brief L2",
+  "namespace": "team-core",
+  "status": "RUNNING",
+  "url": "https://xagent.choly.ca/ui/tasks/1302",
+  "workspace": "xagent"
+}
+
+If the task does not have a name, use xagent:update_my_task to set one.
+
+If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.
+When responding on external platforms, always suffix your message with (task {id}) with your task id.
+
+When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use subscribe=false for reference links to external resources you didn't create.
+
+When done, use xagent:create_link for any URLs you created (PRs, issues, etc).
+Always use web URLs that users can visit, not API URLs.
+Use xagent:report to log important observations.
+If you need to re-check for updates mid-run, call xagent:get_my_task.
+
+Your text responses are NOT visible to users - only tool calls matter.
