@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@connectrpc/connect-query'
 import {
-  getTaskDetails,
+  getTask,
+  listLinks,
   updateTask,
   archiveTask,
   unarchiveTask,
@@ -79,11 +80,13 @@ function TaskDetail() {
     el.style.height = `${el.scrollHeight + borderY}px`
   }, [instruction])
 
-  const { data, isLoading, error, refetch } = useQuery(
-    getTaskDetails,
-    { id: taskId },
-    { refetchInterval: 60000 },
-  )
+  const {
+    data: taskData,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery(getTask, { id: taskId }, { refetchInterval: 60000 })
+  const { data: linkData } = useQuery(listLinks, { taskId }, { refetchInterval: 60000 })
 
   // The single activity view is the timeline: every instruction, external
   // event, report, lifecycle transition, and link the task produced, in order.
@@ -166,8 +169,8 @@ function TaskDetail() {
     )
   }
 
-  const task = data?.task
-  const links = data?.links ?? []
+  const task = taskData?.task
+  const links = linkData?.links ?? []
 
   if (!task) {
     return (
