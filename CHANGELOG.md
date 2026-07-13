@@ -1,5 +1,78 @@
 # Changelog
 
+## [2.13.0](https://github.com/icholy/xagent/compare/v2.12.0...v2.13.0) (2026-07-13)
+
+
+### Features
+
+* **agent:** add NextEventToken config field ([8ae008f](https://github.com/icholy/xagent/commit/8ae008f97d5cc29b0e33381beb7da320c913b605))
+* **agent:** add RenderBrief and Options.TaskDetails ([d28483a](https://github.com/icholy/xagent/commit/d28483ad8a016fe592bd00b9a7bbf498df280efe))
+* **agent:** advance the event cursor after a successful run ([547f6f8](https://github.com/icholy/xagent/commit/547f6f8b437d1dd665ab92c1e39565524efc4b04))
+* **agent:** driver fetches and injects first-run task brief ([23276c5](https://github.com/icholy/xagent/commit/23276c5ef4866719f058073dd2045f833bf3a1ca))
+* **agent:** filter wake events server-side via the types RPC filter ([181ff41](https://github.com/icholy/xagent/commit/181ff4146c919ae105ff8ff2ae4eedc9fbadd63a))
+* **agent:** inject wake events into the prompt ([a9625ce](https://github.com/icholy/xagent/commit/a9625ce912fb3526fb77c66f25dbf11cef64043d))
+* **agent:** render task brief in first-run prompt branch ([05f00ae](https://github.com/icholy/xagent/commit/05f00aee53bd1f67aeab5f7923163f4536eed19e))
+* **apiserver:** add types filter to ListEventsByTask RPC ([92cd8a8](https://github.com/icholy/xagent/commit/92cd8a8bb8db2b8f16a3d5de8bc7d88eb5f9c12a))
+* **apiserver:** expose task namespace through proto and API ([ff943a7](https://github.com/icholy/xagent/commit/ff943a708cd5c0e0097c50fca1cce06c402e2105))
+* **eventrouter:** partition rule matching and create by namespace ([7bcf481](https://github.com/icholy/xagent/commit/7bcf4816aa1139871551ba95f9afc9b3ceeb9617)), closes [#1317](https://github.com/icholy/xagent/issues/1317)
+* **events:** persist source/type on ExternalPayload ([fef18f1](https://github.com/icholy/xagent/commit/fef18f14dcd8f1ddf3bb118bbe47aafc3ac106c4)), closes [#1410](https://github.com/icholy/xagent/issues/1410)
+* **pagination:** expose whether more pages remain (More bool) ([5272387](https://github.com/icholy/xagent/commit/5272387c3d9f58a49052cc18e0ce2462f2e9dcba)), closes [#1389](https://github.com/icholy/xagent/issues/1389)
+* **store:** surface task namespace on subscribed links ([1f447f3](https://github.com/icholy/xagent/commit/1f447f339ce249a24632ba7dea5485d2ab42e52d))
+* **store:** thread task namespace through the store ([cc84fd4](https://github.com/icholy/xagent/commit/cc84fd497e178bc88e695d3fb0906caee5c02f51))
+* **webui:** add task namespace field and badge ([afa24be](https://github.com/icholy/xagent/commit/afa24bebd24769fd644df87251fe036bf1e96f09))
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([d727f6b](https://github.com/icholy/xagent/commit/d727f6b505a0f0a39bf27aa020d4c233841bfbe4))
+* **eventrouter:** include task_logs in no-wake notification ([1334088](https://github.com/icholy/xagent/commit/13340887cb04ecdf43c688b2006f0e9bfa38d758))
+
+
+### Performance Improvements
+
+* **store:** re-add partial keyset index for active tasks ([bab2111](https://github.com/icholy/xagent/commit/bab21110b9c4ee5323db0ab0f64d58abc1c5d564))
+
+
+### Miscellaneous
+
+* **agent:** add hybrid markdown event renderer ([b905abf](https://github.com/icholy/xagent/commit/b905abfa2224f0f84f8161d6e2148cc2da7384e9))
+* **agent:** build event block with strings.Builder ([c0ce42e](https://github.com/icholy/xagent/commit/c0ce42ec6cc7b6f2280eb49f522bf344f088909d))
+* **agent:** converge init/wake prompt into one skeleton ([a502c77](https://github.com/icholy/xagent/commit/a502c77862bbaca84d0fac03f3bb2f29b07f6df0))
+* **agent:** drop blank line after external event header ([dc925cb](https://github.com/icholy/xagent/commit/dc925cb23d31f411b9e55d423968683d163b8fdd))
+* **agent:** drop GetTaskDetails from driver first-run brief ([82cafb2](https://github.com/icholy/xagent/commit/82cafb2c06a7846fb374d21764ada23f2df4ce31))
+* **agent:** extract prompt rendering into agentprompt package ([5b01e84](https://github.com/icholy/xagent/commit/5b01e84cd83e932cb5f2cdf9f5720beb4f03afd4))
+* **agent:** flatten Options and share one event loop across init/wake prompts ([8a9ca00](https://github.com/icholy/xagent/commit/8a9ca00010714b7cb02389520e41b1d8b7c5b8aa))
+* **agent:** inline external Type line with fmt.Sprintf ([fe65712](https://github.com/icholy/xagent/commit/fe65712c5b24098239170e9025f4127cb2c676b6))
+* **agent:** inline the event types filter and stabilize RenderEvent ([358a5a4](https://github.com/icholy/xagent/commit/358a5a4fcadcc1f960947df06ddb3d3c0f3acc82))
+* **agent:** marshal wake events inside the template ([6983de7](https://github.com/icholy/xagent/commit/6983de7fc6648c9e5dc2ef45ff23f2000a4c96ae))
+* **agentmcp:** make get_my_task event-native ([89779e2](https://github.com/icholy/xagent/commit/89779e27d2d366e1aa40c196fb3aeba7e6d3fc24))
+* **agent:** move brief header and framing into the template ([865e93d](https://github.com/icholy/xagent/commit/865e93dced3e50d1aa316bf39f312796d0c3d3ca))
+* **agent:** polish first-run brief and drop dead bootstrap arm ([f006c46](https://github.com/icholy/xagent/commit/f006c46e1e436f8e63fc8894176f57a89e8efef0))
+* **agent:** remove first-run brief driver tests ([7e14787](https://github.com/icholy/xagent/commit/7e14787ad647ac4862a8c1c3381b4115ed167f4c))
+* **agent:** render brief via renderEvent + header/links helpers ([50c20db](https://github.com/icholy/xagent/commit/50c20dbd22cdf0e2dd84561127e4e1ea88a4b877))
+* **agent:** render event stream as a flat list ([a7b398b](https://github.com/icholy/xagent/commit/a7b398be8d9fa0446742970a8ad9b6a228e01d5d))
+* **agent:** render one event per template func call ([7bf3065](https://github.com/icholy/xagent/commit/7bf306522f637fe2d2ebeb7731cc3724fd3ae6ad))
+* **agent:** render wake events via renderEvent markdown ([f4c090d](https://github.com/icholy/xagent/commit/f4c090de71f6924949f47bbd6ac1f554ee48f955))
+* **agent:** reshape external event rendering into labeled fields ([b200b06](https://github.com/icholy/xagent/commit/b200b06aa74cc03b27db51509890530e783197f8))
+* **agent:** restore blank line after external event header ([2a849c7](https://github.com/icholy/xagent/commit/2a849c77ef485ed616f4ecab81486ae36dd1c15d))
+* **agent:** snapshot renderEvent output with goldens ([5b68d9e](https://github.com/icholy/xagent/commit/5b68d9ec83eb44b0976eeeb484036885f4f8f9df))
+* **agent:** snapshot the rendered wake prompt with golden files ([0754bf2](https://github.com/icholy/xagent/commit/0754bf2dc09f75bcb5b4538ae4227ad29e9f5e7b))
+* **agent:** take Render inputs via an Options struct ([0ba93f0](https://github.com/icholy/xagent/commit/0ba93f065f1c3d4408477d58a77c1ab14cd9fae3))
+* **agent:** use external source verbatim in label ([aa5064e](https://github.com/icholy/xagent/commit/aa5064ee765f175430dae4bed711626c0315e879))
+* **cli:** render task list header-only from ListTasks ([6adcc43](https://github.com/icholy/xagent/commit/6adcc43120531a4deda5b2613e8fdc49348e20f3))
+* **eventrouter:** keep first-match-per-org for namespace routing ([f46157a](https://github.com/icholy/xagent/commit/f46157a14545df8e632e0d3209b8d5d7aeff26f3))
+* fold xagent-implement into xagent-orchestrator skill ([76b8a26](https://github.com/icholy/xagent/commit/76b8a26430e2c73876d18372ef4e5d4d224fd4fa))
+* **mcpserver:** make getTask event-native ([655ffb4](https://github.com/icholy/xagent/commit/655ffb4b741cbffad26fcfee755aa194ad124dd1))
+* **n8n:** compose task details from primitives ([52cea8e](https://github.com/icholy/xagent/commit/52cea8ea90706ff35c6744f4a68b64bff9ff403c))
+* pin pnpm to 11.11.0 to avoid broken 11.12.0 ([40fabec](https://github.com/icholy/xagent/commit/40fabecd7b4f9071f6f487f716a9749a21aadbe1))
+* **proto:** remove GetTaskDetails RPC ([db0d66c](https://github.com/icholy/xagent/commit/db0d66c2ffe574c9fe671af4e4f2e35ce99a1a33))
+* rewrite xagent-orchestrator to cover the full lifecycle ([114d10a](https://github.com/icholy/xagent/commit/114d10a385784f79f3ff7055eda3915f5f8b4eef))
+* **runner:** update get_my_task RPC expectations ([ccbd0e8](https://github.com/icholy/xagent/commit/ccbd0e815c3adb8c2f23e6c5f7efce1e70742356))
+* **store:** add tasks.namespace column ([68354ae](https://github.com/icholy/xagent/commit/68354aeaa00f20f32270d077ce8c46379fe8f058))
+* track orchestrator work on a GitHub Project board ([19a9d67](https://github.com/icholy/xagent/commit/19a9d67fb9471c332b9ec55af5e90b1ff9587b92))
+* **webui:** derive timeline source from persisted field ([e3902ef](https://github.com/icholy/xagent/commit/e3902efb7d59282a4d9682d466beb9ed3cbb15f7))
+* **webui:** move task detail off GetTaskDetails to GetTask + ListLinks ([2278c3b](https://github.com/icholy/xagent/commit/2278c3bd16442b2d0f124599287ba014d35f7141))
+
 ## [2.12.0](https://github.com/icholy/xagent/compare/v2.11.0...v2.12.0) (2026-07-12)
 
 
