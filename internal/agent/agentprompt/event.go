@@ -30,7 +30,7 @@ func renderEvent(event *xagentv1.Event) string {
 		}
 	case *xagentv1.Event_External:
 		p := arm.External
-		b.WriteString("### External Event — " + ts + "\n")
+		b.WriteString("### External Event — " + ts)
 		if label := externalType(p.GetSource(), p.GetType()); label != "" {
 			b.WriteString("\nType: " + label)
 		}
