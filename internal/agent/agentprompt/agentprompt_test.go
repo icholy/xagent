@@ -15,9 +15,9 @@ import (
 // first-run brief injected in place of that bootstrap, a wake that renders the
 // pending events as markdown blocks, the bare fallback when a wake has nothing
 // pending, and a wake with a workspace prompt appended. Both the brief and the
-// wake render through the same ## Context / ## Instructions partition, so
-// instructions land last in each; the wake header stays thin (id · name only),
-// and a section whose event group is empty is omitted entirely.
+// wake render through the same flat renderEvent stream (no section headers),
+// with links appended at the end on init only; the wake header stays thin
+// (id · name only).
 // Regenerate the goldens with: go test ./internal/agent/agentprompt/ -run TestRenderGolden -update
 func TestRenderGolden(t *testing.T) {
 	t.Parallel()
@@ -117,14 +117,14 @@ func TestRenderGolden(t *testing.T) {
 			golden: "prompt-wake-empty.golden",
 		},
 		{
-			// Only an instruction event: the ## Context section is omitted entirely.
-			name:   "wake with only an instruction omits the context section",
+			// A wake carrying only an instruction event: a flat single-block stream.
+			name:   "wake with only an instruction",
 			opts:   Options{Started: true, Task: task, Events: events[1:]},
 			golden: "prompt-wake-instruction-only.golden",
 		},
 		{
-			// Only a context event: the ## Instructions section is omitted entirely.
-			name:   "wake with only context omits the instructions section",
+			// A wake carrying only a context (external) event: a flat single-block stream.
+			name:   "wake with only a context event",
 			opts:   Options{Started: true, Task: task, Events: events[:1]},
 			golden: "prompt-wake-context-only.golden",
 		},
