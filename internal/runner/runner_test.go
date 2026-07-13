@@ -159,8 +159,9 @@ func TestRunnerStart(t *testing.T) {
 	err = docker.ContainerRemove(t.Context(), "xagent-1", container.RemoveOptions{})
 	assert.NilError(t, err)
 
-	// Verify get_my_task was called
-	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 1))
+	// Verify GetTaskDetails was called twice: once by the driver's first-run
+	// brief fetch, and once by the dummy agent's get_my_task tool call.
+	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 2))
 
 	// Verify the driver reported its own lifecycle: started, then stopped.
 	assert.DeepEqual(t, testx.ExtractField(mock.SubmittedRunnerEvents(), "Event"), []string{"started", "stopped"})

@@ -1,8 +1,12 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +42,10 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 			return &xagentv1.ListEventsByTaskResponse{NextPageToken: "tail-token"}, nil
 		},
+		// A first (non-wake) run fetches the full task brief for the prompt.
+		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: req.GetId()}}, nil
+		},
 	}
 	// Log is required; tests that don't inspect output use the discard log.
 	// TestDriverRun_LogsToSink overrides it with a file-backed one.
@@ -62,6 +70,84 @@ func TestDriverRun(t *testing.T) {
 		},
 		protocmp.Transform(),
 	)
+}
+
+// capturePromptLog returns a DriverLog that records structured records to buf as
+// JSON lines, so a test can recover the exact prompt the dummy agent logged (it
+// logs the prompt under the "text" attr of its "received prompt" line).
+func capturePromptLog(buf *bytes.Buffer) *DriverLog {
+	return &DriverLog{Logger: *slog.New(slog.NewJSONHandler(buf, nil)), sink: io.Discard}
+}
+
+// lastPrompt returns the prompt text from the dummy agent's "received prompt"
+// log line captured in buf.
+func lastPrompt(t *testing.T, buf *bytes.Buffer) string {
+	t.Helper()
+	prompt, found := "", false
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var rec struct {
+			Msg  string `json:"msg"`
+			Text string `json:"text"`
+		}
+		assert.NilError(t, json.Unmarshal([]byte(line), &rec))
+		if rec.Msg == "dummy agent received prompt" {
+			prompt, found = rec.Text, true
+		}
+	}
+	assert.Assert(t, found, "no prompt was logged")
+	return prompt
+}
+
+func TestDriverRun_FirstRunInjectsBrief(t *testing.T) {
+	t.Parallel()
+	// Arrange - a first run whose GetTaskDetails returns a field-complete brief.
+	driver, mock := setupDriver(t, &Config{Type: TypeDummy})
+	mock.GetTaskDetailsFunc = func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+		return &xagentv1.GetTaskDetailsResponse{
+			Task: &xagentv1.Task{
+				Id:   req.GetId(),
+				Name: "brief-task-name",
+				Url:  "https://xagent.example/ui/tasks/1",
+			},
+			Events: []*xagentv1.Event{
+				{Id: 1, Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{Text: "do the briefed thing"}}},
+			},
+		}, nil
+	}
+	var buf bytes.Buffer
+	driver.Log = capturePromptLog(&buf)
+
+	// Act
+	assert.NilError(t, driver.Run(t.Context()))
+
+	// Assert - the fetched brief's fields reached the prompt and the get_my_task
+	// bootstrap instruction is gone; the first run fetched the brief exactly once.
+	prompt := lastPrompt(t, &buf)
+	assert.Assert(t, cmp.Contains(prompt, "brief-task-name"))
+	assert.Assert(t, cmp.Contains(prompt, "https://xagent.example/ui/tasks/1"))
+	assert.Assert(t, cmp.Contains(prompt, "do the briefed thing"))
+	assert.Assert(t, !strings.Contains(prompt, "Use xagent:get_my_task to fetch your task instructions"))
+	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 1))
+}
+
+func TestDriverRun_WakePromptUnchanged(t *testing.T) {
+	t.Parallel()
+	// Arrange - a wake run (already Started) with no pending events. The brief
+	// fetch is first-run-only, so a wake must not call GetTaskDetails and its
+	// prompt must be exactly the wake-branch text it was before this change.
+	driver, mock := setupDriver(t, &Config{Type: TypeDummy, Started: true})
+	var buf bytes.Buffer
+	driver.Log = capturePromptLog(&buf)
+
+	// Act
+	assert.NilError(t, driver.Run(t.Context()))
+
+	// Assert - the unchanged wake prompt, and no first-run brief fetch.
+	assert.Equal(t, lastPrompt(t, &buf), "The task was updated. Continue.")
+	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 0))
 }
 
 func TestDriverRun_DrainsEventsToTail(t *testing.T) {
@@ -89,6 +175,9 @@ func TestDriverRun_DrainsEventsToTail(t *testing.T) {
 		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 			seenTokens = append(seenTokens, req.GetPageToken())
 			return pages[req.GetPageToken()], nil
+		},
+		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: req.GetId()}}, nil
 		},
 	}
 	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}
@@ -158,6 +247,9 @@ func TestDriverRun_EventTokenNotAdvancedOnError(t *testing.T) {
 		},
 		ListEventsByTaskFunc: func(_ context.Context, _ *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 			return &xagentv1.ListEventsByTaskResponse{NextPageToken: "new-token"}, nil
+		},
+		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: req.GetId()}}, nil
 		},
 	}
 	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}
