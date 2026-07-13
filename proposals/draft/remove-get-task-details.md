@@ -76,13 +76,18 @@ events, _ := s.client.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
 links,  _ := s.client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: s.task.ID})
 ```
 
-`taskDetailsToMap` keeps its exact output shape; it just takes the three
-responses instead of the one bundle. The `Types` filter reproduces the brief the
-handler used to compute server-side (`task.go:205-206`). `ListEventsByTask` with
-no page fields takes the legacy unpaged path (all matching events, ascending —
-`event.go:100-108`), which is what the brief wants. Instructions are still
-projected out of the events here; no synthesized server-side `instructions`
-field returns.
+The output goes **fully event-native** — this is the #1406 motivation this
+effort subsumes. `taskDetailsToMap` **drops the synthesized `instructions`
+key**: the output becomes `{id, name, status, workspace, namespace, url, links,
+events}`, where `events` is the raw instruction+external slice and the agent
+reads instruction-arm events straight from it. The `Types` filter reproduces the
+brief the handler used to compute server-side (`task.go:205-206`).
+`ListEventsByTask` with no page fields takes the legacy unpaged path (all
+matching events, ascending — `event.go:100-108`), which is what the brief wants.
+No synthesized `instructions` array — re-bucketing the instruction arm back out
+of the stream is exactly what #1406 set out to remove, so the projection is
+deleted, not relocated. (This is **not** byte-identical to today's output; the
+`instructions` key is gone.)
 
 #### 2. driver / first-run brief — `internal/agent/driver.go` + `agentprompt`
 
@@ -134,9 +139,10 @@ markdown, `get_my_task` renders JSON, and each now composes its own inputs.
 `links`) *plus* a separate `ListEventsByTask` with no type filter (`:240`) to
 pull the full stream and project `report`/`lifecycle` arms into `logs`.
 
-**After:** the same two-audience need (instructions from the brief, logs from the
-full stream) collapses to **one** event fetch. Fetch the full stream once and
-derive both from it:
+**After:** go **fully event-native**, matching the webui timeline shape and
+finishing the #1406 reshape. The handler already fetches the full stream once for
+`logs`; now that single stream *is* the output. Fetch header + full stream +
+links:
 
 ```go
 task,   _ := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
@@ -144,12 +150,16 @@ events, _ := h.service.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{T
 links,  _ := h.service.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: input.ID})
 ```
 
-`instructions` = filter `events` for the instruction arm; `logs` = filter for
-`report`/`lifecycle` (`model.EventFromProto` switch, exactly as `:245-253`
-today); `links` from `links.GetLinks()`. The output struct (`taskDetails` at
-`:225-234`) is unchanged. Net: one event fetch instead of two, and no
-`GetTaskDetails`. (The issue's table lists this consumer as "header + raw
-events"; the code also emits `links`, so `ListLinks` is included.)
+The output struct **drops both synthesized fields** — the `Instructions`
+projection *and* the `Logs` (report/lifecycle) projection — and presents the
+**raw `events` stream** (all arms, stream order) alongside the header and links.
+A consumer wanting the old `instructions` filters `events` for the instruction
+arm; one wanting the old activity `logs` filters for `report`/`lifecycle` — the
+same filters the handler did internally, now done by the caller over one uniform
+list. This is the same event-native shape the webui timeline already renders from
+`ListEventsByTask`, so `getTask` and the timeline agree. Net: `taskDetails`
+becomes `{id, name, workspace, runner, status, url, links, events}` (no
+`instructions`, no `logs`), a single event fetch, and no `GetTaskDetails`.
 
 #### 4. CLI `task list` — `internal/command/task_list.go`
 
@@ -261,11 +271,13 @@ then delete the RPC last once nothing calls it. Slices 1–6 are order-independe
 and each ships on its own; slice 7 depends on all of them (the regenerated
 clients must have no remaining callers, or the Go/webui/n8n builds break).
 
-1. **`get_my_task` off the aggregator** — Delivers: `agentmcp` composes
-   `GetTask` + `ListEventsByTask(instruction,external)` + `ListLinks`;
-   `taskDetailsToMap` takes the three responses. Depends on: nothing (RPC still
-   exists). Verifiable by: `internal/agentmcp/xmcp_test.go` — output map is
-   byte-identical to today.
+1. **`get_my_task` off the aggregator, event-native** — Delivers: `agentmcp`
+   composes `GetTask` + `ListEventsByTask(instruction,external)` + `ListLinks`;
+   `taskDetailsToMap` takes the three responses and **drops the `instructions`
+   key** (output = header + `links` + raw `events`). Depends on: nothing (RPC
+   still exists). Verifiable by: `internal/agentmcp/xmcp_test.go` — output has
+   **no `instructions` key**, and the instruction-arm events are present in the
+   `events` stream.
 
 2. **Driver first-run brief off the aggregator** — Delivers: drop the
    `GetTaskDetails` call; use the already-drained `events` for `promptEvents`
@@ -275,10 +287,12 @@ clients must have no remaining callers, or the Go/webui/n8n builds break).
    expectations (it currently asserts two `GetTaskDetails` calls,
    `runner_test.go:162-164`).
 
-3. **`mcpserver.getTask` off the aggregator** — Delivers: `GetTask` +
-   one full-stream `ListEventsByTask` + `ListLinks`, deriving `instructions` and
-   `logs` from the single stream. Depends on: nothing. Verifiable by: the
-   `mcpserver` tests — `taskDetails` output unchanged, one event fetch not two.
+3. **`mcpserver.getTask` off the aggregator, event-native** — Delivers: `GetTask`
+   + one full-stream `ListEventsByTask` + `ListLinks`; the output **drops the
+   synthesized `instructions` and `logs` fields** and presents the raw `events`
+   stream (all arms) beside header + links. Depends on: nothing. Verifiable by:
+   the `mcpserver` tests — output has **no `instructions`/`logs`** fields and the
+   raw stream is present; a single event fetch.
 
 4. **CLI `task list` header-only** — Delivers: render rows from `ListTasks`
    alone; delete the per-task `GetTaskDetails` N+1 and the
@@ -334,11 +348,25 @@ clients must have no remaining callers, or the Go/webui/n8n builds break).
   service, external n8n client). Three short call sequences are clearer than one
   helper threading a filter and three output shapes.
 
+- **Event-native output vs. preserving the synthesized buckets.** `get_my_task`
+  and `mcpserver.getTask` could have kept their `instructions` (and, for
+  `mcpserver`, `logs`) projections byte-for-byte, changing only the plumbing
+  underneath. Rejected: re-bucketing the stream back into `instructions`/`logs`
+  is precisely what #1406 set out to remove, and this effort subsumes #1406. Both
+  consumers now present the raw `events` stream (the brief slice for the agent,
+  the full stream for `getTask`), and a consumer that wants "just instructions"
+  or "just the activity log" filters the arm it cares about — the same filter the
+  handler used to bake in. Cost: a breaking output-shape change for these two
+  surfaces (the `instructions`/`logs` keys vanish); accepted under the no-compat
+  constraint, and the LLM/timeline consumers read the flat stream more directly
+  than a nested re-bucketing.
+
 - **`mcpserver`: one full-stream fetch vs. keeping the brief+full split.** Today
-  it fetches the brief (via `GetTaskDetails`) *and* the full stream. Folding both
-  into a single full-stream `ListEventsByTask` and filtering the instruction arm
-  client-side removes a round trip; the full stream is a strict superset of the
-  brief, so nothing is lost.
+  it fetches the brief (via `GetTaskDetails`) *and* the full stream. Going
+  event-native means the single full-stream `ListEventsByTask` *is* the output —
+  it already fetched that stream for `logs`, so this removes a round trip and the
+  two projections in one move; the full stream is a strict superset of the brief,
+  so nothing is lost.
 
 ## Open Questions
 
