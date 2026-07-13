@@ -47,28 +47,78 @@ func RenderEvent(event *xagentv1.Event) (string, error) {
 	return string(out), nil
 }
 
-// RenderBrief renders the body of a task's first-run brief: the raw event
-// stream as a flat renderEvent list followed by the links. It reads the
-// event-native GetTaskDetailsResponse directly and no longer emits the
-// flattened taskDetailsToMap JSON blob or the duplicated instructions
-// projection; the instruction appears once, as an instruction event through
-// renderEvent. The header and the framing sentence are rendered by PROMPT.md
-// (via renderHeader and a template literal) so the prose lives in the template.
+// RenderBrief renders the body of a task's first-run brief: the event stream
+// partitioned into a `## Context` section (external/lifecycle/report events plus
+// the task's standing links) and a `## Instructions` section, so instructions
+// render last. It reads the event-native GetTaskDetailsResponse directly and no
+// longer emits the flattened taskDetailsToMap JSON blob or the duplicated
+// instructions projection; the instruction appears once, as an instruction event
+// through renderEvent. The header, how-to-work guidance, and framing sentence are
+// rendered by PROMPT.md so the prose lives in the template.
 //
-// It is nil-safe: a nil resp renders an empty string. Events with no set arm
-// and empty link/event slices contribute nothing, so the returned blocks are
-// always joined by a single blank line with no stray whitespace.
+// It shares renderSections with the wake path (renderWake) — the only difference
+// is that the brief carries links, which the wake path omits. It is nil-safe: a
+// nil resp renders an empty string.
 func RenderBrief(resp *xagentv1.GetTaskDetailsResponse) string {
-	var blocks []string
-	for _, event := range resp.GetEvents() {
-		if block := renderEvent(event); block != "" {
-			blocks = append(blocks, block)
+	return renderSections(resp.GetEvents(), resp.GetLinks())
+}
+
+// renderWake renders the wake update's event stream through the same
+// context/instructions partition as RenderBrief, but without links: a wake
+// resumes the same session, which already saw the links on its first turn.
+func renderWake(events []*xagentv1.Event) string {
+	return renderSections(events, nil)
+}
+
+// partitionEvents splits an event stream by arm into the context group
+// (external, lifecycle, report) and the instruction group, preserving stream
+// order within each group. It is what lets both the first-run brief and the wake
+// update render `## Context` then `## Instructions` from one code path, so a new
+// instruction always lands last regardless of which events accompany it.
+func partitionEvents(events []*xagentv1.Event) (context, instructions []*xagentv1.Event) {
+	for _, event := range events {
+		if _, ok := event.GetPayload().(*xagentv1.Event_Instruction); ok {
+			instructions = append(instructions, event)
+		} else {
+			context = append(context, event)
 		}
 	}
-	if links := renderLinks(resp.GetLinks()); links != "" {
-		blocks = append(blocks, links)
+	return context, instructions
+}
+
+// renderSections renders an event stream as a `## Context` section followed by a
+// `## Instructions` section, each event through renderEvent in stream order.
+// Links (init only) render under `## Context` after the context events, since
+// links are context. A section whose group is empty is omitted entirely. Both
+// the first-run brief and the wake update render through this one function so
+// instructions always render last.
+func renderSections(events []*xagentv1.Event, links []*xagentv1.TaskLink) string {
+	context, instructions := partitionEvents(events)
+	var contextBlocks []string
+	for _, event := range context {
+		if block := renderEvent(event); block != "" {
+			contextBlocks = append(contextBlocks, block)
+		}
 	}
-	return strings.Join(blocks, "\n\n")
+	for _, link := range links {
+		contextBlocks = append(contextBlocks, linkBlock(
+			link.GetTitle(), formatEventTime(link.GetCreatedAt()),
+			link.GetRelevance(), link.GetUrl(), link.GetSubscribe()))
+	}
+	var instructionBlocks []string
+	for _, event := range instructions {
+		if block := renderEvent(event); block != "" {
+			instructionBlocks = append(instructionBlocks, block)
+		}
+	}
+	var sections []string
+	if len(contextBlocks) > 0 {
+		sections = append(sections, "## Context\n\n"+strings.Join(contextBlocks, "\n\n"))
+	}
+	if len(instructionBlocks) > 0 {
+		sections = append(sections, "## Instructions\n\n"+strings.Join(instructionBlocks, "\n\n"))
+	}
+	return strings.Join(sections, "\n\n")
 }
 
 // renderHeader renders the task header block: the `# Task {id} · {name}` title
@@ -85,25 +135,6 @@ func renderHeader(task *xagentv1.Task) string {
 	return b.String()
 }
 
-// renderLinks renders the task's links, one block per link joined by blank
-// lines, in the same shape as the renderEvent link arm (`### Link: {title} —
-// {time}` / relevance / url · (subscribed)). It returns "" for an empty slice
-// so the caller can drop the section entirely.
-func renderLinks(links []*xagentv1.TaskLink) string {
-	blocks := make([]string, 0, len(links))
-	for _, link := range links {
-		var b strings.Builder
-		b.WriteString("### Link: " + link.GetTitle() + " — " + formatEventTime(link.GetCreatedAt()) + "\n")
-		b.WriteString(link.GetRelevance() + "\n")
-		b.WriteString(link.GetUrl())
-		if link.GetSubscribe() {
-			b.WriteString(" · (subscribed)")
-		}
-		blocks = append(blocks, b.String())
-	}
-	return strings.Join(blocks, "\n\n")
-}
-
 //go:embed PROMPT.md
 var promptText string
 
@@ -113,6 +144,7 @@ var promptTemplate = template.Must(
 		"renderEvent":  renderEvent,
 		"renderHeader": renderHeader,
 		"RenderBrief":  RenderBrief,
+		"renderWake":   renderWake,
 	}).Parse(promptText),
 )
 

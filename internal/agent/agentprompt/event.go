@@ -47,17 +47,29 @@ func renderEvent(event *xagentv1.Event) string {
 		b.WriteString("### " + lifecycleSummary(event) + " — " + ts)
 	case *xagentv1.Event_Link:
 		p := arm.Link
-		b.WriteString("### Link: " + p.GetTitle() + " — " + ts + "\n")
-		b.WriteString(p.GetRelevance() + "\n")
-		b.WriteString(p.GetUrl())
-		if p.GetSubscribe() {
-			b.WriteString(" · (subscribed)")
-		}
+		b.WriteString(linkBlock(p.GetTitle(), ts, p.GetRelevance(), p.GetUrl(), p.GetSubscribe()))
 	case *xagentv1.Event_Report:
 		b.WriteString("### Report — " + ts + "\n")
 		b.WriteString(arm.Report.GetContent())
 	default:
 		return ""
+	}
+	return b.String()
+}
+
+// linkBlock formats a link as the shared `### Link: {title} — {time}` /
+// relevance / url · (subscribed) block. It is the one formatter behind both the
+// renderEvent link arm (over a LinkPayload) and the task's standing links (over
+// *TaskLink) rendered under ## Context, so the two emit byte-identical blocks.
+// The returned block has no trailing newline; callers join blocks with blank
+// lines.
+func linkBlock(title, ts, relevance, url string, subscribe bool) string {
+	var b strings.Builder
+	b.WriteString("### Link: " + title + " — " + ts + "\n")
+	b.WriteString(relevance + "\n")
+	b.WriteString(url)
+	if subscribe {
+		b.WriteString(" · (subscribed)")
 	}
 	return b.String()
 }

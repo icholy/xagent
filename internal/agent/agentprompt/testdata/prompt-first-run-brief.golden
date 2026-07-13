@@ -3,19 +3,6 @@
 - Workspace: xagent · Namespace: team-core
 - Task: https://xagent.choly.ca/ui/tasks/1302
 
-This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
-
-### Instruction — 2023-11-14 22:15 UTC
-Implement the first-run brief.
-Source: https://github.com/icholy/xagent/issues/1398
-
-### PR review requested — 2023-11-14 22:13 UTC
-Source: https://github.com/icholy/xagent/pull/1394
-
-### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC
-the PR this task opened
-https://github.com/icholy/xagent/pull/1394 · (subscribed)
-
 If the task does not have a name, use xagent:update_my_task to set one.
 
 If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.
@@ -29,3 +16,20 @@ Use xagent:report to log important observations.
 If you need to re-check for updates mid-run, call xagent:get_my_task.
 
 Your text responses are NOT visible to users - only tool calls matter.
+
+This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
+
+## Context
+
+### PR review requested — 2023-11-14 22:13 UTC
+Source: https://github.com/icholy/xagent/pull/1394
+
+### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC
+the PR this task opened
+https://github.com/icholy/xagent/pull/1394 · (subscribed)
+
+## Instructions
+
+### Instruction — 2023-11-14 22:15 UTC
+Implement the first-run brief.
+Source: https://github.com/icholy/xagent/issues/1398
