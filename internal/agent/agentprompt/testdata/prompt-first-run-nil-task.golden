@@ -4,7 +4,7 @@
 - Task: 
 
 ## How to work this task
-If the task does not have a name, use xagent:update_my_task to set one.
+This task has no name yet — set one with xagent:update_my_task.
 If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url, suffixing your message with (task 0).
 When you create a resource (PR, issue, comment), record it with xagent:create_link and subscribe=true so you receive replies, even after the task is complete. Use subscribe=false only for reference links you didn't create.
 Prefer web URLs a user can visit over API URLs.
