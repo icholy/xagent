@@ -38,8 +38,9 @@ they are actually events in the stream.
 > `proposals/implemented/hybrid-prompt-rendering.md`. That migration also **deleted
 > `renderMessage` and `RenderEvent`** from `agentprompt` — the protojson →
 > `json.MarshalIndent` normalization this proposal originally planned to reuse no
-> longer exists. The scope below is trimmed accordingly: the brief is done, and a
-> shared renderer must carry its own normalization.
+> longer exists. The scope below is trimmed accordingly: the brief is done, and —
+> with no normalization left to share — each remaining consumer drops its own
+> projection in place rather than moving onto a shared renderer.
 
 **Settled constraint:** no backward compatibility. This is early dev with no
 external users. We reshape in place (breaking), migrate every consumer in the same
@@ -144,7 +145,7 @@ This is the same object today minus the `instructions` key. The `get_my_task` to
 description is updated from *"instructions, links, and events"* to reflect that
 instructions are the instruction-arm events.
 
-### One shared renderer for the JSON consumers
+### Drop the projection per consumer — no shared renderer
 
 The first-run brief already resolved its half of the duplication, but in the
 *opposite* direction from a shared map: #1408/#1421 gave it a genuinely different
@@ -153,55 +154,42 @@ the caller-shaped JSON the tool results emit. That validates the original
 divergence rationale (a readable brief vs. a machine-shaped tool result are not
 the same object) and takes the brief permanently out of scope here.
 
-What remains is the duplication *among the JSON consumers themselves*.
-`get_my_task`, CLI `task list`, and `mcpserver.getTask` each independently
-protojson-marshal the same header + `links` + `events`, and each independently
-projects `instructions` out of the stream. Once the projection is dropped, the
-three flattenings collapse to the same event-native object — so this is the point
-to reconcile them into one renderer.
+What remains is the projected `instructions` key in the three JSON consumers.
+Each one **drops its own projection in place** — no new package, no shared
+`Render`, no abstraction to introduce. Each consumer keeps the local rendering it
+already has (its own protojson marshaling of header + `links` + `events`) and
+simply stops synthesizing the `instructions` key from the stream.
 
-Introduce a proto-only package `internal/taskbrief` with a single renderer:
+This is deliberate. Collapsing the three into one shared renderer was considered
+and rejected: it would add a new proto-only package and a shared abstraction to
+carry the protojson → `json.MarshalIndent` normalization that
+`renderMessage`/`RenderEvent` used to provide (those were **deleted from
+`agentprompt`** by the brief migration, so there is nothing left to reuse). The
+adapter being removed is a handful of lines per consumer; replacing it with a
+package is more surface than the cleanup saves. The small remaining duplication —
+each consumer still marshals its own header + `links` + `events` — is accepted in
+exchange for not introducing that package. If a shared renderer earns its keep
+later (e.g. a third caller wants byte-identical output), it can be extracted then.
 
-```go
-// internal/taskbrief/taskbrief.go
-package taskbrief
+### Per-consumer changes
 
-// Render builds the event-native task brief: a thin header, links, and the raw
-// event stream. Instructions are NOT projected — instruction-arm events are the
-// instructions. Depends only on the proto package (no import cycle), so every
-// JSON consumer — the in-container MCP server, the CLI, and the server-side debug
-// view — can share it.
-func Render(resp *xagentv1.GetTaskDetailsResponse) map[string]any
-```
-
-`renderMessage`/`RenderEvent` — the old protojson → `json.MarshalIndent`
-normalization — were **deleted from `agentprompt`** by the brief migration, so
-there is no existing normalization to reuse. `taskbrief.Render` **owns its own**:
-it protojson-marshals each event/link, then re-indents through
-`json.MarshalIndent`, because protojson deliberately varies its inter-token
-whitespace per process and routing through `encoding/json` makes the output
-deterministic. Owning it in one place keeps `get_my_task` and `task list`
-byte-for-byte identical and gives the agent one format to parse, not two.
-
-This package serves the JSON consumers only. The first-run brief does **not** use
-it — it stays on its markdown PROMPT.md path, which is the correct format for its
-audience.
-
-### Per-consumer migration
-
-1. **`get_my_task`** — `getMyTask` (`xmcp.go:108`) calls `taskbrief.Render(resp)`;
-   delete `taskDetailsToMap`. Update the tool description.
-2. **CLI `task list`** — replace the inline projection (`task_list.go:56-85`) with
-   `taskbrief.Render(details)`; delete the duplicated loop.
+1. **`get_my_task`** — in `taskDetailsToMap` (`xmcp.go:157`), delete the
+   instruction-projection loop and the `"instructions"` map key; keep building the
+   header + `links` + raw `events` map it already builds. Update the tool
+   description.
+2. **CLI `task list`** — delete the inline `instructions` projection loop
+   (`task_list.go:56-64`) and the `"instructions"` map key (`task_list.go:82`);
+   keep the rest of the per-task flattening (header + `links` + raw `events`) as
+   is.
 3. **`mcpserver.getTask`** — this is a user-facing *debug* view, not an agent brief.
-   Migrate it fully event-native: present the raw event stream instead of the
-   synthesized `instructions` **and** the separately-fetched `logs`. Today it makes
-   two event reads — `GetTaskDetails` (instruction+external, for `instructions`)
-   plus `ListEventsByTask` (report+lifecycle, for `logs`) (`mcpserver.go:226-252`).
-   The event-native form is a single `ListEventsByTask` (all arms) presented as a
-   raw `events` array beside the header + `links`, collapsing both projections into
-   the stream — the same shape the webui timeline already shows. `Task` header
-   fields it displays (`id, name, workspace, runner, status, url`) are unchanged.
+   Drop the synthesized `Instructions []instruction` field (`mcpserver.go:213`,
+   projected at `:226-235`) and present the raw event stream instead. Today it
+   makes two event reads — `GetTaskDetails` (instruction+external, for
+   `instructions`) plus `ListEventsByTask` (report+lifecycle, for `logs`)
+   (`mcpserver.go:240-252`). The event-native form presents a raw `events` array
+   beside the header + `links` — the same shape the webui timeline already shows —
+   which can also subsume the separate `logs` projection. `Task` header fields it
+   displays (`id, name, workspace, runner, status, url`) are unchanged.
 4. **First-run brief** — **no change.** Already migrated off the adapter by
    #1408/#1421; it renders markdown via PROMPT.md and no longer projects
    `instructions`. Listed here only to record that it is intentionally out of scope.
@@ -221,38 +209,29 @@ projection, not a wire field.
 
 ## Implementation Plan
 
-Layer cake, ordered so each slice is independently reviewable and mergeable. The
-foundation adds the shared renderer; each consumer then migrates onto it
-independently, so the migration slices can land in any order (or in parallel) once
-slice 1 is in.
+There is **no foundation slice** — no shared package to land first. Each consumer
+drops its own projection independently, so all three slices are fully independent
+and can land in any order or in parallel. The verification slice is likewise
+independent.
 
-1. **Shared `taskbrief` renderer** — Delivers: new proto-only package
-   `internal/taskbrief` with `Render(resp) map[string]any` producing the
-   event-native shape (thin header + `links` + raw `events`, **no** projected
-   `instructions`), carrying its own protojson → `json.MarshalIndent`
-   normalization (the old `agentprompt` helper is gone). Depends on: nothing.
-   Verifiable by: unit test with a fixture response — asserts no `instructions`
-   key, `events` present in stream order, links present, header subset correct,
-   whitespace deterministic across runs.
+1. **Drop the projection in `get_my_task`** — Delivers: `taskDetailsToMap`
+   (`xmcp.go:157`) no longer projects `instructions`; the map is header + `links` +
+   raw `events`. The `get_my_task` tool description is updated. Depends on:
+   nothing. Verifiable by: `agentmcp` test — `get_my_task` output contains no
+   `instructions` key and carries the raw event stream.
 
-2. **Migrate `get_my_task` onto the renderer** — Delivers: `getMyTask` calls
-   `taskbrief.Render`; `taskDetailsToMap` is deleted; the `get_my_task` tool
-   description is updated. Depends on: (1). Verifiable by: `agentmcp` test —
-   `get_my_task` output contains no `instructions` key and carries the raw event
-   stream.
+2. **Drop the projection in CLI `task list`** — Delivers: `task_list.go` no longer
+   builds or emits `instructions`; the per-task map is header + `links` + raw
+   `events`. Depends on: nothing. Verifiable by: running `xagent task list` —
+   output has raw `events`, no `instructions` key.
 
-3. **Migrate CLI `task list`** — Delivers: `task_list.go` uses `taskbrief.Render`;
-   the inline projection is deleted. Depends on: (1). Verifiable by: running
-   `xagent task list` — output has raw `events`, no `instructions` key.
+3. **Drop the projection in `mcpserver.getTask`** — Delivers: `getTask` drops the
+   synthesized `Instructions` field and presents a raw `events` array beside the
+   header + `links` (optionally subsuming the separate `logs` projection). Depends
+   on: nothing. Verifiable by: `mcpserver` test — `get_task` output exposes the
+   event stream and no synthesized `instructions`.
 
-4. **Migrate `mcpserver.getTask` to raw events** — Delivers: `getTask` presents a
-   single raw `events` array (all arms via `ListEventsByTask`) beside the header +
-   `links`, dropping both the `instructions` projection and the separate `logs`
-   projection. Depends on: (1) for the shared shape convention (may present its own
-   struct; the point is dropping the projections). Verifiable by: `mcpserver` test
-   — `get_task` output exposes the event stream and no synthesized `instructions`.
-
-5. **(Verification-only) Confirm webui + proto untouched** — Delivers: a note /
+4. **(Verification-only) Confirm webui + proto untouched** — Delivers: a note /
    test-run confirming the webui detail page and the generated bindings still
    compile and render against an unchanged `GetTaskDetailsResponse`, and that
    `mise run generate` produces no diff. Depends on: nothing (can run first or
@@ -268,20 +247,24 @@ slice 1 is in.
   `Task` would break the webui detail page and the runner. Thinness belongs in the
   renderer, and it is already there.
 - **No proto change may read as "nothing to do."** The value is real but Go-side:
-  removing a synthesized field and collapsing the remaining duplicate projections
-  into one shared renderer. Stating "no proto change" up front prevents a reviewer
-  from expecting a wire diff that the survey shows is unwarranted.
+  removing a synthesized field from three consumers. Stating "no proto change" up
+  front prevents a reviewer from expecting a wire diff that the survey shows is
+  unwarranted.
 - **Drop `instructions` vs. keep it as a convenience.** Keeping a synthesized
   `instructions` array is friendlier to a model skimming the result, but it is the
   exact adapter the issue removes and it desyncs from the stream (ordering,
   external events interleaved with instructions). Event-native wins:
   instruction-arm events carry the same `text`/`url` and sit in true stream order.
-- **Shared JSON renderer vs. the brief's separate markdown path.** The brief
-  deliberately diverged onto markdown (#1408/#1421) because a model reading a task
-  cold wants prose blocks, not a tool-shaped JSON map. That divergence is kept.
-  The unification here is narrower and safe: it collapses only the three JSON
-  consumers, which genuinely do emit the same object, without dragging the brief
-  back into a shared shape it has outgrown.
+- **Shared renderer vs. dropping the projection per consumer.** Considered
+  extracting a proto-only `internal/taskbrief.Render` that the three JSON consumers
+  share, producing byte-identical output. Rejected: the projection being removed is
+  a few lines per consumer, and a shared renderer would have to carry its own
+  protojson → `json.MarshalIndent` normalization (the `agentprompt` helper that
+  used to provide it was deleted by the brief migration) — a new package and a new
+  abstraction for a cleanup that doesn't need one. Dropping the projection in place
+  keeps each consumer's existing local rendering and accepts the small remaining
+  duplication (each still marshals its own header + `links` + `events`). The shared
+  renderer can be extracted later if a concrete need for identical output appears.
 
 ## Open Questions
 
@@ -289,7 +272,9 @@ slice 1 is in.
   to render `events`/`links`. Out of scope here, but the event-native cleanup
   invites a follow-up: either drop the per-task detail fetch (list only needs the
   header) or add a batch endpoint. Flagging, not solving.
-- **`mcpserver.getTask` shape.** Should the user-facing debug `get_task` reuse
-  `taskbrief.Render` verbatim (map) or keep a typed struct with an `events` field?
-  Leaning toward presenting the raw stream to match the webui timeline, but the
-  exact struct-vs-map form is a reviewer preference to settle in slice 4.
+- **`mcpserver.getTask` shape.** With the synthesized `Instructions` field gone,
+  should the debug view keep its typed struct (adding a raw `events` field) or
+  switch to a map matching the agent-facing shape? And should the raw `events`
+  array subsume the separate `logs` projection, or keep `logs` as a convenience?
+  Leaning toward presenting the raw stream to match the webui timeline; the exact
+  struct-vs-map form is a reviewer preference to settle in slice 3.
