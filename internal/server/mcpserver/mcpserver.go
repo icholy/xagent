@@ -2,15 +2,16 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/icholy/xagent/internal/auth/apiauth"
-	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/proto/xagent/v1/xagentv1connect"
 	"github.com/icholy/xagent/internal/x/mcpx"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -74,7 +75,7 @@ func AddTools(server *mcp.Server, service xagentv1connect.XAgentServiceHandler, 
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_task",
-		Description: "Get full details of a task including instructions, logs, and links",
+		Description: "Get full details of a task including its event stream and links",
 		Annotations: &mcp.ToolAnnotations{
 			ReadOnlyHint: true,
 		},
@@ -182,19 +183,22 @@ type getTaskInput struct {
 }
 
 func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input getTaskInput) (*mcp.CallToolResult, any, error) {
-	resp, err := h.service.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{
-		Id: input.ID,
-	})
+	// Event-native: compose the header, the full event stream (all arms, in
+	// stream order), and the links from the primitives. The old synthesized
+	// instructions/logs projections are dropped — a caller wanting just the
+	// instruction arm or just the report/lifecycle activity filters the raw
+	// events itself, matching the webui timeline shape.
+	taskResp, err := h.service.GetTask(ctx, &xagentv1.GetTaskRequest{Id: input.ID})
 	if err != nil {
 		return mcpx.ErrorResult("failed to get task: %v", err), nil, nil
 	}
-	type instruction struct {
-		Text string `json:"text"`
-		URL  string `json:"url,omitempty"`
+	eventsResp, err := h.service.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: input.ID})
+	if err != nil {
+		return mcpx.ErrorResult("failed to list events: %v", err), nil, nil
 	}
-	type logEntry struct {
-		Type    string `json:"type"`
-		Content string `json:"content"`
+	linksResp, err := h.service.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: input.ID})
+	if err != nil {
+		return mcpx.ErrorResult("failed to list links: %v", err), nil, nil
 	}
 	type link struct {
 		ID        int64  `json:"id"`
@@ -204,17 +208,16 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		Subscribe bool   `json:"subscribe"`
 	}
 	type taskDetails struct {
-		ID           int64         `json:"id"`
-		Name         string        `json:"name"`
-		Workspace    string        `json:"workspace"`
-		Runner       string        `json:"runner,omitempty"`
-		Status       string        `json:"status"`
-		URL          string        `json:"url,omitempty"`
-		Instructions []instruction `json:"instructions"`
-		Logs         []logEntry    `json:"logs"`
-		Links        []link        `json:"links"`
+		ID        int64             `json:"id"`
+		Name      string            `json:"name"`
+		Workspace string            `json:"workspace"`
+		Runner    string            `json:"runner,omitempty"`
+		Status    string            `json:"status"`
+		URL       string            `json:"url,omitempty"`
+		Links     []link            `json:"links"`
+		Events    []json.RawMessage `json:"events"`
 	}
-	task := resp.Task
+	task := taskResp.Task
 	result := taskDetails{
 		ID:        task.Id,
 		Name:      task.Name,
@@ -223,34 +226,7 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 		Status:    task.Status.String(),
 		URL:       task.Url,
 	}
-	// Instructions are instruction events in the brief, not a task field.
-	for _, event := range resp.Events {
-		inst := event.GetInstruction()
-		if inst == nil {
-			continue
-		}
-		result.Instructions = append(result.Instructions, instruction{
-			Text: inst.Text,
-			URL:  inst.Url,
-		})
-	}
-	// Logs moved onto the event stream: reports (from-agent) and lifecycle
-	// transitions (about-task) replace the old report/audit/info/error log rows.
-	// Read the full stream and project those two arms into the activity list.
-	eventsResp, err := h.service.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
-		TaskId: input.ID,
-	})
-	if err == nil {
-		for _, event := range eventsResp.Events {
-			switch payload := model.EventFromProto(event).Payload.(type) {
-			case *model.ReportPayload:
-				result.Logs = append(result.Logs, logEntry{Type: "report", Content: payload.Content})
-			case *model.LifecyclePayload:
-				result.Logs = append(result.Logs, logEntry{Type: "lifecycle", Content: payload.Summary()})
-			}
-		}
-	}
-	for _, l := range resp.Links {
+	for _, l := range linksResp.Links {
 		result.Links = append(result.Links, link{
 			ID:        l.Id,
 			Relevance: l.Relevance,
@@ -258,6 +234,16 @@ func (h *handlers) getTask(ctx context.Context, req *mcp.CallToolRequest, input 
 			Title:     l.Title,
 			Subscribe: l.Subscribe,
 		})
+	}
+	// Marshal events with protojson so their arms serialize under their proper
+	// wire names (the fat Event proto doesn't round-trip through encoding/json).
+	marshalOpts := protojson.MarshalOptions{Indent: "  "}
+	for _, event := range eventsResp.Events {
+		data, err := marshalOpts.Marshal(event)
+		if err != nil {
+			return mcpx.ErrorResult("failed to format event: %v", err), nil, nil
+		}
+		result.Events = append(result.Events, data)
 	}
 	return mcpx.JSONResult(result), nil, nil
 }
