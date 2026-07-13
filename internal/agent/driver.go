@@ -139,12 +139,13 @@ func (d *Driver) run(ctx context.Context, task *xagentv1.Task) error {
 			Log:       &d.Log.Logger,
 		})
 	}
-	return d.runAgent(ctx)
+	return d.runAgent(ctx, task)
 }
 
 // runAgent executes the setup commands and the agent prompt. This is the normal
-// (non-shell) sandbox run.
-func (d *Driver) runAgent(ctx context.Context) error {
+// (non-shell) sandbox run. task is the one Run fetched at the top of the run; it
+// carries the id/name rendered into the wake header line.
+func (d *Driver) runAgent(ctx context.Context, task *xagentv1.Task) error {
 	// Load config
 	cfg, err := d.Config.Load(d.TaskID)
 	if err != nil {
@@ -213,12 +214,13 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	defer a.Close()
 
 	// Bootstrap prompt. The events drained above are injected into the wake branch
-	// of the template (marshaled there by the RenderEvent template func); the first
-	// run and a wake with nothing pending render without them.
+	// of the template (rendered there as markdown blocks by the renderEvent func);
+	// the first run and a wake with nothing pending render without them.
 	prompt, err := agentprompt.Render(agentprompt.Options{
 		Started:     cfg.Started,
 		Prompt:      cfg.Prompt,
 		Events:      events,
+		Task:        task,    // header line on the wake branch
 		TaskDetails: details, // nil on wake
 	})
 	if err != nil {

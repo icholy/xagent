@@ -12,8 +12,8 @@ import (
 
 // TestRenderGolden snapshots the whole rendered bootstrap prompt across its
 // branches: the first-run get_my_task bootstrap (nil TaskDetails fallback), the
-// first-run brief injected in place of that bootstrap, a wake that injects the
-// pending events as a JSON array, the bare fallback when a wake has nothing
+// first-run brief injected in place of that bootstrap, a wake that renders the
+// pending events as markdown blocks, the bare fallback when a wake has nothing
 // pending, and a wake with a workspace prompt appended.
 // Regenerate the goldens with: go test ./internal/agent/agentprompt/ -run TestRenderGolden -update
 func TestRenderGolden(t *testing.T) {
@@ -36,6 +36,16 @@ func TestRenderGolden(t *testing.T) {
 				Url:  "https://github.com/icholy/xagent/issues/2",
 			}},
 		},
+	}
+	// The task the wake header renders (`# Task {id} · {name}`) — the same task the
+	// driver already fetched at the top of the run.
+	task := &xagentv1.Task{
+		Id:        1302,
+		Name:      "first-run-brief L2",
+		Status:    xagentv1.TaskStatus_RUNNING,
+		Workspace: "xagent",
+		Namespace: "team-core",
+		Url:       "https://xagent.choly.ca/ui/tasks/1302",
 	}
 	// A field-complete brief: named task with url/namespace, an instruction event,
 	// an external event, and a link. Exercises every field RenderBrief carries.
@@ -95,7 +105,7 @@ func TestRenderGolden(t *testing.T) {
 		},
 		{
 			name:   "wake injects pending events",
-			opts:   Options{Started: true, Events: events},
+			opts:   Options{Started: true, Events: events, Task: task},
 			golden: "prompt-wake-events.golden",
 		},
 		{
@@ -105,7 +115,7 @@ func TestRenderGolden(t *testing.T) {
 		},
 		{
 			name:   "wake injects events with a workspace prompt appended",
-			opts:   Options{Started: true, Prompt: "Custom workspace instructions.", Events: events},
+			opts:   Options{Started: true, Prompt: "Custom workspace instructions.", Events: events, Task: task},
 			golden: "prompt-wake-events-workspace.golden",
 		},
 	}
