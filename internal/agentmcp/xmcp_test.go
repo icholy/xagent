@@ -46,13 +46,19 @@ func setupTestSession(t *testing.T, srv *Server) *mcp.ClientSession {
 func TestGetMyTask(t *testing.T) {
 	// Arrange
 	client := &xagentclient.ClientMock{
-		GetTaskDetailsFunc: func(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
+		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 			assert.Equal(t, req.Id, int64(123))
-			return &xagentv1.GetTaskDetailsResponse{
+			return &xagentv1.GetTaskResponse{
 				Task: &xagentv1.Task{
 					Id:   123,
 					Name: "test task",
 				},
+			}, nil
+		},
+		ListEventsByTaskFunc: func(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			assert.Equal(t, req.TaskId, int64(123))
+			assert.DeepEqual(t, req.Types, []string{model.EventTypeInstruction, model.EventTypeExternal})
+			return &xagentv1.ListEventsByTaskResponse{
 				Events: []*xagentv1.Event{
 					{
 						Payload: &xagentv1.Event_Instruction{
@@ -64,6 +70,10 @@ func TestGetMyTask(t *testing.T) {
 					},
 				},
 			}, nil
+		},
+		ListLinksFunc: func(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
+			assert.Equal(t, req.TaskId, int64(123))
+			return &xagentv1.ListLinksResponse{}, nil
 		},
 	}
 
@@ -91,10 +101,7 @@ func TestGetMyTask(t *testing.T) {
 		"workspace": "",
 		"namespace": "",
 		"url":       "",
-		"instructions": []any{
-			map[string]any{"text": "do something", "url": "https://example.com"},
-		},
-		"links": []any{},
+		"links":     []any{},
 		"events": []any{
 			map[string]any{
 				"instruction": map[string]any{"text": "do something", "url": "https://example.com"},

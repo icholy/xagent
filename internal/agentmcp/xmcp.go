@@ -106,12 +106,25 @@ func (s *Server) report(ctx context.Context, req *mcp.CallToolRequest, input rep
 }
 
 func (s *Server) getMyTask(ctx context.Context, req *mcp.CallToolRequest, input any) (*mcp.CallToolResult, any, error) {
-	resp, err := s.client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: s.task.ID})
+	task, err := s.client.GetTask(ctx, &xagentv1.GetTaskRequest{Id: s.task.ID})
 	if err != nil {
 		return mcpx.ErrorResult("failed to get task: %v", err), nil, nil
 	}
 
-	return mcpx.JSONResult(taskDetailsToMap(resp)), nil, nil
+	events, err := s.client.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{
+		TaskId: s.task.ID,
+		Types:  []string{model.EventTypeInstruction, model.EventTypeExternal},
+	})
+	if err != nil {
+		return mcpx.ErrorResult("failed to get task events: %v", err), nil, nil
+	}
+
+	links, err := s.client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: s.task.ID})
+	if err != nil {
+		return mcpx.ErrorResult("failed to get task links: %v", err), nil, nil
+	}
+
+	return mcpx.JSONResult(taskDetailsToMap(task.GetTask(), events.GetEvents(), links.GetLinks())), nil, nil
 }
 
 type updateMyTaskInput struct {
@@ -151,41 +164,31 @@ func textResult(format string, args ...any) *mcp.CallToolResult {
 	}
 }
 
-// taskDetailsToMap converts a GetTaskDetailsResponse to a map for JSON output.
-// Instructions are no longer a task field — they are instruction events in the
-// brief, so they are projected out of the event stream here.
-func taskDetailsToMap(resp *xagentv1.GetTaskDetailsResponse) map[string]any {
+// taskDetailsToMap renders the task header, links, and raw event stream to a map
+// for JSON output. The event stream is the instruction+external brief; the agent
+// reads instruction-arm events straight from it, so there is no synthesized
+// `instructions` field.
+func taskDetailsToMap(task *xagentv1.Task, taskEvents []*xagentv1.Event, taskLinks []*xagentv1.TaskLink) map[string]any {
 	marshalOpts := protojson.MarshalOptions{Indent: "  "}
 
-	var instructions []json.RawMessage
-	for _, event := range resp.GetEvents() {
-		inst := event.GetInstruction()
-		if inst == nil {
-			continue
-		}
-		data, _ := marshalOpts.Marshal(inst)
-		instructions = append(instructions, data)
-	}
-
-	links := make([]json.RawMessage, len(resp.GetLinks()))
-	for i, link := range resp.GetLinks() {
+	links := make([]json.RawMessage, len(taskLinks))
+	for i, link := range taskLinks {
 		links[i], _ = marshalOpts.Marshal(link)
 	}
 
-	events := make([]json.RawMessage, len(resp.GetEvents()))
-	for i, event := range resp.GetEvents() {
+	events := make([]json.RawMessage, len(taskEvents))
+	for i, event := range taskEvents {
 		events[i], _ = marshalOpts.Marshal(event)
 	}
 
 	return map[string]any{
-		"id":           resp.Task.Id,
-		"name":         resp.Task.Name,
-		"status":       resp.Task.Status.String(),
-		"workspace":    resp.Task.Workspace,
-		"namespace":    resp.Task.Namespace,
-		"url":          resp.Task.Url,
-		"instructions": instructions,
-		"links":        links,
-		"events":       events,
+		"id":        task.Id,
+		"name":      task.Name,
+		"status":    task.Status.String(),
+		"workspace": task.Workspace,
+		"namespace": task.Namespace,
+		"url":       task.Url,
+		"links":     links,
+		"events":    events,
 	}
 }
