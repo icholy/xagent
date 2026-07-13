@@ -180,18 +180,22 @@ func (d *Driver) runAgent(ctx context.Context, task *xagentv1.Task) error {
 	}
 	cfg.NextEventToken = token
 
-	// Fetch the full task brief for the first-run prompt. This runs only on the
-	// first run (!cfg.Started): the first-run branch of the template renders the
-	// brief in place of the get_my_task bootstrap instruction, so the agent
-	// learns its task without a tool round-trip. A wake run leaves details nil
-	// and is completely unchanged (the wake branch renders Events instead). See
-	// proposals/draft/first-run-brief-injection.md.
-	var details *xagentv1.GetTaskDetailsResponse
+	// Fetch the task's standing links for the first-run prompt. This runs only on
+	// the first run (!cfg.Started): the first-run branch of the template renders
+	// the brief in place of the get_my_task bootstrap instruction, so the agent
+	// learns its task without a tool round-trip. The brief's events are the
+	// instruction+external slice already drained above (on the first run
+	// cfg.NextEventToken is empty, so the drain starts at the head of the stream
+	// and returns exactly that slice); only the links need a fresh read. A wake
+	// run leaves promptLinks nil and is completely unchanged (the wake branch
+	// renders Events instead). See proposals/draft/first-run-brief-injection.md.
+	var promptLinks []*xagentv1.TaskLink
 	if !cfg.Started {
-		details, err = d.Client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: d.TaskID})
+		resp, err := d.Client.ListLinks(ctx, &xagentv1.ListLinksRequest{TaskId: d.TaskID})
 		if err != nil {
-			return fmt.Errorf("failed to fetch task brief: %w", err)
+			return fmt.Errorf("failed to fetch task links: %w", err)
 		}
+		promptLinks = resp.GetLinks()
 	}
 
 	// Start agent
@@ -214,21 +218,16 @@ func (d *Driver) runAgent(ctx context.Context, task *xagentv1.Task) error {
 	defer a.Close()
 
 	// Compose the prompt's event stream so the template loops it once, the same way
-	// on both paths. On a wake it is the events drained above (rendered as markdown
-	// blocks by the renderEvent func); on the first run it is the brief's full event
-	// stream, plus the task's standing links. A wake with nothing pending renders
-	// without either.
-	promptEvents := events
-	var promptLinks []*xagentv1.TaskLink
-	if !cfg.Started {
-		promptEvents = details.GetEvents()
-		promptLinks = details.GetLinks()
-	}
+	// on both paths. The drained events are the same slice both times: on a wake
+	// they are the events pending since the last cursor; on the first run (empty
+	// cursor) they are the instruction+external brief from the head of the stream.
+	// The links are attached only on the first run. A wake with nothing pending
+	// renders without either.
 	prompt, err := agentprompt.Render(agentprompt.Options{
 		Started: cfg.Started,
 		Prompt:  cfg.Prompt,
 		Task:    task, // header line, and gates the first-run brief
-		Events:  promptEvents,
+		Events:  events,
 		Links:   promptLinks,
 	})
 	if err != nil {

@@ -38,9 +38,9 @@ func setupDriver(t *testing.T, cfg *Config) (*Driver, *xagentclient.ClientMock) 
 		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 			return &xagentv1.ListEventsByTaskResponse{NextPageToken: "tail-token"}, nil
 		},
-		// A first (non-wake) run fetches the full task brief for the prompt.
-		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: req.GetId()}}, nil
+		// A first (non-wake) run fetches the task's standing links for the prompt.
+		ListLinksFunc: func(_ context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
+			return &xagentv1.ListLinksResponse{}, nil
 		},
 	}
 	// Log is required; tests that don't inspect output use the discard log.
@@ -94,8 +94,8 @@ func TestDriverRun_DrainsEventsToTail(t *testing.T) {
 			seenTokens = append(seenTokens, req.GetPageToken())
 			return pages[req.GetPageToken()], nil
 		},
-		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: req.GetId()}}, nil
+		ListLinksFunc: func(_ context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
+			return &xagentv1.ListLinksResponse{}, nil
 		},
 	}
 	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}
@@ -166,8 +166,8 @@ func TestDriverRun_EventTokenNotAdvancedOnError(t *testing.T) {
 		ListEventsByTaskFunc: func(_ context.Context, _ *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 			return &xagentv1.ListEventsByTaskResponse{NextPageToken: "new-token"}, nil
 		},
-		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-			return &xagentv1.GetTaskDetailsResponse{Task: &xagentv1.Task{Id: req.GetId()}}, nil
+		ListLinksFunc: func(_ context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
+			return &xagentv1.ListLinksResponse{}, nil
 		},
 	}
 	driver := &Driver{TaskID: 1, Client: mock, Log: DiscardDriverLog, Config: store}
