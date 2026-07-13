@@ -111,41 +111,112 @@ Notes:
   mirrors the `summary`-beside-structure decision in
   `event-native-mcp-tools.md`.
 - **`external.details`** (GitHub review comments populate `path`/`line`/`side`/
-  `diff_hunk`) render as a small sub-bullet list, and opaque `data` as a fenced
-  block. This is the **hybrid** point: structure that is genuinely structured
-  stays structured (a fenced diff hunk is more useful as a fenced block than as
-  a JSON string), but the *envelope* around it is prose, not a JSON object.
+  `diff_hunk`) render as a small sub-bullet list, with `diff_hunk` promoted to a
+  fenced ```diff block. This is the **hybrid** point: structure that is genuinely
+  structured stays structured (a fenced diff hunk is more useful as a fenced
+  block than as a JSON string), but the *envelope* around it is prose, not a JSON
+  object. See the worked example below.
 - **`report`** never enters the brief today (reports are from-agent, not
   to-agent) but the renderer handles the arm so the same function can render a
   full timeline elsewhere without a second code path.
 
+#### Worked example: an external event carrying a `details` map
+
+The richest case is a GitHub review comment, whose `ExternalPayload.details`
+carries `path` / `line` / `side` / `diff_hunk`. Today it renders as a nested
+JSON object; the hybrid renders a prose envelope with the structured bits as
+sub-bullets and the hunk as a fenced diff:
+
+**Before** (protojson, as the wake JSON array emits it):
+
+```json
+{
+  "id": "51",
+  "createdAt": "2023-11-14T22:20:00Z",
+  "external": {
+    "description": "icholy commented on driver.go",
+    "url": "https://github.com/icholy/xagent/pull/1394#discussion_r512",
+    "details": {
+      "path": "internal/agent/driver.go",
+      "line": "218",
+      "side": "RIGHT",
+      "diff_hunk": "@@ -215,7 +215,7 @@ func Render(opts Options) {\n-\tTaskDetails: brief,\n+\tTaskDetails: details, // nil on wake"
+    }
+  }
+}
+```
+
+**After** (hybrid):
+
+```
+### icholy commented on driver.go — 2023-11-14 22:20 UTC
+External event. Source: https://github.com/icholy/xagent/pull/1394#discussion_r512
+- path: internal/agent/driver.go
+- line: 218 (RIGHT)
+
+```diff
+@@ -215,7 +215,7 @@ func Render(opts Options) {
+-	TaskDetails: brief,
++	TaskDetails: details, // nil on wake
+```
+```
+
+The `path`/`line`/`side` keys collapse into two readable bullets (`side`
+folded into the line as `218 (RIGHT)`), and `diff_hunk` — the one genuinely
+structured value — becomes a fenced ```diff block the model reads as code rather
+than as an escaped `\n`-laden JSON string. Unknown/other `details` keys fall
+back to plain `- key: value` bullets, so a source that sets its own keys still
+renders sanely without the renderer knowing them.
+
 ### The converged structure
 
-Both prompts render through the same skeleton:
+Both prompts render through the same skeleton. The ordering is deliberate:
+**operational guidance first, task instructions last, context in the middle.**
+A model reads top-to-bottom, so the standing "how to work" rules frame
+everything that follows, and the actual instruction — the thing to act on — sits
+closest to where the model starts generating.
 
 ```
-{header}          # Task {id} · {name}  + status/workspace/namespace/url lines
+{header}          # Task {id} · {name}  + workspace/namespace/url (no status)
+{how-to-work}     # standing operational guidance — FIRST (init only, see below)
 {framing}         # one sentence: "first run, full history" vs "new since last run"
-{event section}   # a list of renderEvent() blocks
-{links}           # init only: the task's links
-{trailer}         # standing instructions (init only — see below)
+{context}         # non-instruction events: external / lifecycle / report, + links
+{instructions}    # to-agent instruction events — LAST
 {workspace prompt}
 ```
+
+Note `header` drops the `Status` line: a task reading this prompt is by
+definition running, so status is noise. The header trims to task id/name,
+workspace/namespace, and the task url.
+
+**Events are grouped by role, not interleaved chronologically.** Within the
+event section the renderer partitions the stream into two groups —
+**context** (external, lifecycle, report) rendered under `## Context`, and
+**instructions** rendered last under `## Instructions` — instead of one
+timestamp-ordered list. This is what lets "instructions last" hold in *both*
+init and wake with one code path: on a wake whose new events include both an
+external comment and a new instruction, the external lands in `## Context` and
+the instruction lands in `## Instructions` at the end — exactly where a
+first-run instruction lands. Each block still carries its timestamp, so the
+true order stays legible even though the layout groups by role. (Within a group,
+events keep stream order.)
 
 The **only** structural differences between init and wake:
 
 1. **Framing sentence** — init: *"This is your first run… the full history
    follows."* wake: *"Since your last run, the task received new events."*
 2. **Which events** — init shows the full to-agent slice #1406 hands the brief;
-   wake shows just the events newer than the driver's saved cursor (#946).
-3. **Links + trailer** — rendered on init only. The wake resumes the *same*
-   session, which already read the header, the links, and the standing
-   instructions on its first turn; re-injecting them every wake is noise. This
-   is a concrete quality win from converging: today the standing-instruction
-   block is duplicated across all three template branches.
+   wake shows just the events newer than the driver's saved cursor (#946). Both
+   feed the *same* context/instructions partition.
+3. **How-to-work + links** — rendered on init only. The wake resumes the *same*
+   session, which already read the header, the guidance, and the links on its
+   first turn; re-injecting them every wake is noise. This is a concrete quality
+   win from converging: today the standing-guidance block is duplicated across
+   all three template branches. (If a wake could ever start a *fresh* harness
+   session, the guidance must render there too — see [Open Questions](#open-questions).)
 
-Everything else — the header, the per-event markdown, the timestamp format — is
-identical, produced by identical code.
+Everything else — the header, the context/instructions partition, the per-event
+markdown, the timestamp format — is identical, produced by identical code.
 
 ### Before / after
 
@@ -201,23 +272,8 @@ If the task does not have a name, use xagent:update_my_task to set one.
 ```
 # Task 1302 · first-run-brief L2
 
-- Status: Running
 - Workspace: xagent · Namespace: team-core
 - Task: https://xagent.choly.ca/ui/tasks/1302
-
-This is your first run on this task. Its full history is below — you already
-have everything you need and do not need to call get_my_task to begin.
-
-## History
-
-### Implement the first-run brief. — 2023-11-14 22:15 UTC
-Instruction. Source: https://github.com/icholy/xagent/issues/1398
-
-### PR review requested — 2023-11-14 22:13 UTC
-External event. Source: https://github.com/icholy/xagent/pull/1394
-
-## Links
-- [feat(agent): first-run brief](https://github.com/icholy/xagent/pull/1394) — the PR this task opened (subscribed)
 
 ## How to work this task
 If the task does not have a name, use xagent:update_my_task to set one.
@@ -226,12 +282,30 @@ When you create a resource (PR, issue, comment), record it with xagent:create_li
 Prefer web URLs a user can visit over API URLs.
 Use xagent:report to log important observations. Your text responses are not visible to users — only tool calls are.
 If you need to re-check for updates mid-run, call xagent:get_my_task.
+
+This is your first run on this task. Its full context is below — you already
+have everything you need and do not need to call get_my_task to begin.
+
+## Context
+
+### PR review requested — 2023-11-14 22:13 UTC
+External event. Source: https://github.com/icholy/xagent/pull/1394
+
+### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC
+The PR this task opened. https://github.com/icholy/xagent/pull/1394 (subscribed)
+
+## Instructions
+
+### Instruction — 2023-11-14 22:15 UTC
+Implement the first-run brief.
+Source: https://github.com/icholy/xagent/issues/1398
 ```
 
-(The instruction header shows the instruction text as the title with the type on
-the body line; an equally reasonable variant is `### Instruction — {time}` with
-the text in the body. Either is fine and is an [open question](#open-questions);
-the point is prose framing over a JSON object.)
+The instruction now uses a fixed `### Instruction — {time}` header with the
+text in the **body**: instruction text is often long markdown, so putting it in
+the title would break the layout. And the instruction sits **last**, directly
+above where the model begins working. The standing "how to work" guidance is the
+first thing after the header, framing everything the model reads.
 
 #### Wake (new events)
 
@@ -269,18 +343,26 @@ Continue working on the task.
 
 Since your last run, the task received new events:
 
+## Context
+
 ### PR review requested — 2023-11-14 22:13 UTC
 External event. Source: https://github.com/icholy/xagent/pull/1394
 
-### keep going — 2023-11-14 22:15 UTC
-Instruction. Source: https://github.com/icholy/xagent/issues/2
+## Instructions
+
+### Instruction — 2023-11-14 22:15 UTC
+keep going
+Source: https://github.com/icholy/xagent/issues/2
 
 Continue working on the task.
 ```
 
-The two `### …` event blocks are **byte-for-byte the same rendering** as the
-init history above — that's the convergence. A wake with nothing pending keeps
-today's terse fallback (`The task was updated. Continue.`).
+The `## Context` / `## Instructions` partition and the per-event blocks are
+**byte-for-byte the same rendering** as the init brief above — that's the
+convergence. The new external comment lands in `## Context` and the new
+instruction lands last in `## Instructions`, exactly where a first-run
+instruction sits. A wake with nothing pending keeps today's terse fallback
+(`The task was updated. Continue.`).
 
 ### Code shape
 
@@ -289,14 +371,18 @@ today's terse fallback (`The task was updated. Continue.`).
 - `renderEvent(*xagentv1.Event) string` — the single arm-switch renderer above.
   Replaces `RenderEvent`, `renderMessage`, and the JSON-normalization comment
   block. No more protojson-through-`encoding/json` round trip.
-- `renderHeader(*xagentv1.Task) string` and `renderLinks([]*TaskLink) string` —
-  small helpers.
-- `RenderBrief(resp)` becomes: header + framing + `renderEvent` over the event
-  slice + links. Reads the thin header + stream from #1406, no longer builds the
-  `map[string]any` with the duplicated `instructions` key.
-- `PROMPT.md` collapses to one structure with a shared trailer partial. The
+- `renderHeader(*xagentv1.Task) string` (id/name + workspace/namespace/url, no
+  status) and `renderLinks([]*TaskLink) string` — small helpers.
+- A partition helper splits a `[]*Event` into `(context, instructions)` by arm
+  so both paths render `## Context` then `## Instructions` from the same code.
+- `RenderBrief(resp)` becomes: header + how-to-work + framing + `renderEvent`
+  over the context group + `renderEvent` over the instruction group. Reads the
+  thin header + stream from #1406, no longer builds the `map[string]any` with the
+  duplicated `instructions` key.
+- `PROMPT.md` collapses to one structure with a shared how-to-work partial. The
   `{{- if .Started -}}` split shrinks to: pick the framing sentence and the
-  event slice; render links + trailer only when `!Started`.
+  event slice; render how-to-work + links only when `!Started`. The
+  context/instructions partition and per-event rendering are shared.
 
 `Options` is unchanged (`Started`, `Prompt`, `Events`, `TaskDetails`), so
 `internal/agent/driver.go:218` needs no change. The rendering funcs registered
@@ -329,16 +415,18 @@ TestRenderGolden [-update]`). Layers land one at a time; the driver contract
    duplicated instructions.
 
 4. **Converge `PROMPT.md`.** Delivers: init and wake share one skeleton (header
-   + framing + event list + trailer); the standing-instruction trailer is
+   → how-to-work → framing → `## Context` → `## Instructions`); the
+   context/instructions partition helper is shared; how-to-work + links are
    defined once and rendered init-only; the three-way branch shrinks to
    framing + slice selection. Depends on: (2), (3). Verifiable by: all goldens;
-   the wake goldens no longer duplicate the standing-instruction block.
+   the wake goldens no longer duplicate the standing-guidance block, and
+   instructions render last in both paths.
 
-5. **Prompt-quality polish.** Delivers: tighten the standing-instruction wording
-   (single deduplicated block, task id interpolated inline), drop the stale
-   `get_my_task`-bootstrap branch if the brief is now always injected on first
-   run, consistent section headers. Depends on: (4). Verifiable by: goldens +
-   a read-through.
+5. **Prompt-quality polish.** Delivers: how-to-work moved to the top and worded
+   as a single deduplicated block with the task id interpolated inline; `Status`
+   dropped from the header; drop the stale `get_my_task`-bootstrap branch if the
+   brief is now always injected on first run; consistent section headers.
+   Depends on: (4). Verifiable by: goldens + a read-through.
 
 Ordering rationale: (1) is a self-contained, well-tested unit with no callers,
 so it merges risk-free. (2) and (3) each independently convert one path and can
@@ -385,17 +473,21 @@ rendering location.
 
 ## Open Questions
 
-- **Instruction header layout.** `### {text} — {time}` (text as title, shown
-  above) vs. `### Instruction — {time}` with the text in the body. Title-as-text
-  scans faster in a long history; type-as-title is more uniform across arms.
-  Pick one in L1.
 - **Report/lifecycle in the init brief.** Today the brief carries only the
   to-agent slice (instruction + external). Should a first run also see recent
   `lifecycle`/`report` events for context (e.g. "sandbox failed last run"), or
   does that belong only to the full timeline? This is really a #1406
-  *which-slice* question; the renderer handles all arms regardless.
-- **Trailer on every wake?** This proposal renders the standing-instruction
-  trailer init-only, assuming the wake resumes a session that already saw it. If
-  a wake can ever start a *fresh* harness session (no prior context), the
-  trailer must render there too — confirm against the driver's session-resume
-  behavior.
+  *which-slice* question; the renderer handles all arms regardless. If they are
+  included, they render under `## Context`, not `## Instructions`.
+- **How-to-work on every wake?** This proposal renders the standing "how to
+  work this task" guidance init-only, assuming the wake resumes a session that
+  already saw it at the top of turn one. If a wake can ever start a *fresh*
+  harness session (no prior context), the guidance must render there too —
+  confirm against the driver's session-resume behavior.
+- **Multiple new instructions on one wake.** If a wake drains more than one new
+  instruction, they all render under `## Instructions` in stream order. That is
+  consistent, but a burst of instructions with intervening external events loses
+  the strict interleaving. The per-event timestamps preserve the true order;
+  confirm that grouping-over-interleaving is the right call for the multi-
+  instruction wake, or whether a single combined instruction should be preferred
+  upstream.
