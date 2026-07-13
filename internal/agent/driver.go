@@ -179,6 +179,20 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	}
 	cfg.NextEventToken = token
 
+	// Fetch the full task brief for the first-run prompt. This runs only on the
+	// first run (!cfg.Started): the first-run branch of the template renders the
+	// brief in place of the get_my_task bootstrap instruction, so the agent
+	// learns its task without a tool round-trip. A wake run leaves details nil
+	// and is completely unchanged (the wake branch renders Events instead). See
+	// proposals/draft/first-run-brief-injection.md.
+	var details *xagentv1.GetTaskDetailsResponse
+	if !cfg.Started {
+		details, err = d.Client.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: d.TaskID})
+		if err != nil {
+			return fmt.Errorf("failed to fetch task brief: %w", err)
+		}
+	}
+
 	// Start agent
 	a, err := NewAgent(Options{
 		Type:       cfg.Type,
@@ -202,9 +216,10 @@ func (d *Driver) runAgent(ctx context.Context) error {
 	// of the template (marshaled there by the RenderEvent template func); the first
 	// run and a wake with nothing pending render without them.
 	prompt, err := agentprompt.Render(agentprompt.Options{
-		Started: cfg.Started,
-		Prompt:  cfg.Prompt,
-		Events:  events,
+		Started:     cfg.Started,
+		Prompt:      cfg.Prompt,
+		Events:      events,
+		TaskDetails: details, // nil on wake
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)
