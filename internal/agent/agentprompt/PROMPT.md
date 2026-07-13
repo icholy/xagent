@@ -26,8 +26,8 @@ This is your first run on this task. Its full context is below — you already h
 {{ renderEvent . }}{{ end }}{{ range .Links }}
 
 {{ renderLink . }}{{ end }}
-{{- end -}}
 {{- if .Prompt}}
 
 {{ .Prompt }}
+{{- end -}}
 {{- end -}}

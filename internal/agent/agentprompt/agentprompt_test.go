@@ -13,10 +13,12 @@ import (
 // TestRenderGolden snapshots the whole rendered bootstrap prompt across its
 // branches: the first-run brief with a nil task (rendered nil-safely), the
 // field-complete first-run brief, a wake that renders the pending events as
-// markdown blocks, the bare fallback when a wake has nothing pending, and a wake
-// with a workspace prompt appended. Both the brief and the wake render through
-// the same flat renderEvent stream (no section headers), with links appended at
-// the end on init only; the wake header stays thin (id · name only).
+// markdown blocks, the bare fallback when a wake has nothing pending, and a
+// first-run brief with a workspace prompt appended. Both the brief and the wake
+// render through the same flat renderEvent stream (no section headers), with
+// links and the workspace prompt appended at the end on init only; the wake
+// header stays thin (id · name only), and a wake never renders the workspace
+// prompt even when one is set.
 // Regenerate the goldens with: go test ./internal/agent/agentprompt/ -run TestRenderGolden -update
 func TestRenderGolden(t *testing.T) {
 	t.Parallel()
@@ -103,6 +105,13 @@ func TestRenderGolden(t *testing.T) {
 			golden: "prompt-first-run-brief.golden",
 		},
 		{
+			// A first run with a workspace prompt: the prompt is appended at the end
+			// of the brief, after the links. The workspace prompt is init-only.
+			name:   "first run renders the task brief with a workspace prompt appended",
+			opts:   Options{Task: task, Events: briefEvents, Links: briefLinks, Prompt: "Custom workspace instructions."},
+			golden: "prompt-first-run-brief-workspace.golden",
+		},
+		{
 			name:   "wake injects pending events",
 			opts:   Options{Started: true, Events: events, Task: task},
 			golden: "prompt-wake-events.golden",
@@ -125,9 +134,11 @@ func TestRenderGolden(t *testing.T) {
 			golden: "prompt-wake-context-only.golden",
 		},
 		{
-			name:   "wake injects events with a workspace prompt appended",
+			// A wake never renders the workspace prompt: even with a Prompt set, the
+			// output is byte-identical to the plain wake (prompt-wake-events.golden).
+			name:   "wake does not render the workspace prompt",
 			opts:   Options{Started: true, Prompt: "Custom workspace instructions.", Events: events, Task: task},
-			golden: "prompt-wake-events-workspace.golden",
+			golden: "prompt-wake-events.golden",
 		},
 	}
 	for _, tt := range tests {
