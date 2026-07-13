@@ -14,8 +14,8 @@ The task was updated. Continue.
 {{ renderHeader .Task }}
 
 ## How to work this task
-If the task does not have a name, use xagent:update_my_task to set one.
-If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url, suffixing your message with (task {{ .Task.GetId }}).
+{{ if not .Task.GetName }}This task has no name yet — set one with xagent:update_my_task.
+{{ end }}If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url, suffixing your message with (task {{ .Task.GetId }}).
 When you create a resource (PR, issue, comment), record it with xagent:create_link and subscribe=true so you receive replies, even after the task is complete. Use subscribe=false only for reference links you didn't create.
 Prefer web URLs a user can visit over API URLs.
 Use xagent:report to log important observations. Your text responses are not visible to users — only tool calls are.
