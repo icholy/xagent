@@ -6,13 +6,14 @@ import (
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"gotest.tools/v3/assert"
+	"gotest.tools/v3/golden"
 )
 
-// TestRenderEvent covers renderEvent across all five payload arms, asserting the
-// exact markdown block each produces. The external arm is exercised both with
-// source/type/data/details (the worked example in the proposal) and without
-// (a pre-#1410 event, where the label line is omitted).
+// TestRenderEvent snapshots renderEvent across all five payload arms, one golden
+// per arm. The external arm is exercised both with source/type/data/details (the
+// worked example in the proposal) and without (a pre-#1410 event, where the
+// label line is omitted).
+// Regenerate the goldens with: go test ./internal/agent/agentprompt/ -run TestRenderEvent -update
 func TestRenderEvent(t *testing.T) {
 	t.Parallel()
 	// Fixed timestamps: 1_700_000_000 == 2023-11-14 22:13:20 UTC. The formatter
@@ -21,9 +22,9 @@ func TestRenderEvent(t *testing.T) {
 		return timestamppb.New(time.Unix(1_700_000_000+offset, 0).UTC())
 	}
 	tests := []struct {
-		name  string
-		event *xagentv1.Event
-		want  string
+		name   string
+		event  *xagentv1.Event
+		golden string
 	}{
 		{
 			name: "instruction",
@@ -35,9 +36,7 @@ func TestRenderEvent(t *testing.T) {
 					Url:  "https://github.com/icholy/xagent/issues/2",
 				}},
 			},
-			want: "### Instruction — 2023-11-14 22:15 UTC\n" +
-				"keep going\n" +
-				"Source: https://github.com/icholy/xagent/issues/2",
+			golden: "event-instruction.golden",
 		},
 		{
 			name: "external without source or type",
@@ -49,8 +48,7 @@ func TestRenderEvent(t *testing.T) {
 					Url:         "https://github.com/icholy/xagent/pull/1394",
 				}},
 			},
-			want: "### PR review requested — 2023-11-14 22:13 UTC\n" +
-				"Source: https://github.com/icholy/xagent/pull/1394",
+			golden: "event-external-plain.golden",
 		},
 		{
 			name: "external with source, type, content, and details",
@@ -71,20 +69,7 @@ func TestRenderEvent(t *testing.T) {
 					},
 				}},
 			},
-			want: "### icholy commented on driver.go — 2023-11-14 22:20 UTC\n" +
-				"github · pull_request_review_comment\n" +
-				"Source: https://github.com/icholy/xagent/pull/1394#discussion_r512\n" +
-				"\n" +
-				"This nil check needs a test before we merge — can you add one that covers the wake path?\n" +
-				"\n" +
-				"```json\n" +
-				"{\n" +
-				"  \"diff_hunk\": \"@@ -215,7 +215,7 @@ func Render(opts Options) {\\n-\\tTaskDetails: brief,\\n+\\tTaskDetails: details, // nil on wake\",\n" +
-				"  \"line\": \"218\",\n" +
-				"  \"path\": \"internal/agent/driver.go\",\n" +
-				"  \"side\": \"RIGHT\"\n" +
-				"}\n" +
-				"```",
+			golden: "event-external.golden",
 		},
 		{
 			name: "lifecycle",
@@ -97,7 +82,7 @@ func TestRenderEvent(t *testing.T) {
 					ToStatus:   "Completed",
 				}},
 			},
-			want: "### Sandbox exited (Running -> Completed) — 2023-11-14 22:13 UTC",
+			golden: "event-lifecycle.golden",
 		},
 		{
 			name: "link",
@@ -112,9 +97,7 @@ func TestRenderEvent(t *testing.T) {
 					Subscribe: true,
 				}},
 			},
-			want: "### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC\n" +
-				"the PR this task opened\n" +
-				"https://github.com/icholy/xagent/pull/1394 · (subscribed)",
+			golden: "event-link.golden",
 		},
 		{
 			name: "report",
@@ -125,14 +108,13 @@ func TestRenderEvent(t *testing.T) {
 					Content: "Looked into the failing test; root cause is a nil cursor.",
 				}},
 			},
-			want: "### Report — 2023-11-14 22:15 UTC\n" +
-				"Looked into the failing test; root cause is a nil cursor.",
+			golden: "event-report.golden",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, renderEvent(tt.event), tt.want)
+			golden.Assert(t, renderEvent(tt.event), tt.golden)
 		})
 	}
 }

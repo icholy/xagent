@@ -1,0 +1,2 @@
+### Report — 2023-11-14 22:15 UTC
+Looked into the failing test; root cause is a nil cursor.
