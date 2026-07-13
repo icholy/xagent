@@ -32,7 +32,7 @@ func renderEvent(event *xagentv1.Event) string {
 	case *xagentv1.Event_External:
 		p := arm.External
 		b.WriteString("### External Event — " + ts + "\n")
-		b.WriteString(fmt.Sprintf("\nType: %s - %s", p.GetSource(), p.GetType()))
+		fmt.Fprintf(&b, "\nType: %s - %s", p.GetSource(), p.GetType())
 		if p.GetDescription() != "" {
 			b.WriteString("\nDescription: " + p.GetDescription())
 		}
