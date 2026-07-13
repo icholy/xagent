@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.13.1](https://github.com/icholy/xagent/compare/v2.13.0...v2.13.1) (2026-07-13)
+
+
+### Miscellaneous
+
+* **agent:** make name-setting line conditional in first-run brief ([bdd7453](https://github.com/icholy/xagent/commit/bdd74534a11e5e69f9ca8c0423b541ac416395e8))
+* **agent:** render workspace prompt in how-to-work section ([d811a63](https://github.com/icholy/xagent/commit/d811a63dbae4cc721487edb36cc5f4593da9bb10))
+* **agent:** render workspace prompt on first run only ([98f7bd0](https://github.com/icholy/xagent/commit/98f7bd05725a3cacc9d1689bcd95bced5cea0c65))
+* regenerate taskstatus_string.go ([398d52c](https://github.com/icholy/xagent/commit/398d52c26af2875197210ea8ae628ce6b66a7884)), closes [#1443](https://github.com/icholy/xagent/issues/1443)
+
 ## [2.13.0](https://github.com/icholy/xagent/compare/v2.12.0...v2.13.0) (2026-07-13)
 
 
