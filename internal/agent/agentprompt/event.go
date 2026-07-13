@@ -13,10 +13,10 @@ import (
 // switches on the set payload arm and emits a header line (`### … — {time}`)
 // plus an arm-specific body/footer, per the mapping in
 // proposals/implemented/hybrid-prompt-rendering.md. It is the hybrid renderer: the
-// envelope (header, external label, Source: line) and the external content body
-// are prose markdown, while the opaque external details map is emitted verbatim
-// as an indented-JSON block. The returned block has no trailing newline; callers
-// join blocks with blank lines. An event with no set arm renders empty.
+// envelope (header, labeled Type:/Description:/URL: fields) and the external
+// content body are prose markdown, while the opaque external details map is
+// emitted verbatim as an indented-JSON block. The returned block has no trailing
+// newline; callers join blocks with blank lines. An event with no set arm renders empty.
 func renderEvent(event *xagentv1.Event) string {
 	ts := formatEventTime(event.GetCreatedAt())
 	var b strings.Builder
@@ -30,12 +30,15 @@ func renderEvent(event *xagentv1.Event) string {
 		}
 	case *xagentv1.Event_External:
 		p := arm.External
-		b.WriteString("### " + p.GetDescription() + " — " + ts)
-		if label := externalLabel(p.GetSource(), p.GetType()); label != "" {
-			b.WriteString("\n" + label)
+		b.WriteString("### External Event — " + ts + "\n")
+		if label := externalType(p.GetSource(), p.GetType()); label != "" {
+			b.WriteString("\nType: " + label)
+		}
+		if p.GetDescription() != "" {
+			b.WriteString("\nDescription: " + p.GetDescription())
 		}
 		if p.GetUrl() != "" {
-			b.WriteString("\nSource: " + p.GetUrl())
+			b.WriteString("\nURL: " + p.GetUrl())
 		}
 		if p.GetData() != "" {
 			b.WriteString("\n\n" + p.GetData())
@@ -83,11 +86,11 @@ func formatEventTime(ts *timestamppb.Timestamp) string {
 	return ts.AsTime().UTC().Format("2006-01-02 15:04") + " UTC"
 }
 
-// externalLabel builds the "{source} · {type}" label line for an external event
-// (from #1410). The source and type are used verbatim; either field is omitted
-// when empty, so a pre-#1410 event with both empty yields "" and the caller
-// drops the label line entirely.
-func externalLabel(source, eventType string) string {
+// externalType builds the "{source} - {type}" value for an external event's
+// Type: line. The source and type are used verbatim — no display-casing or
+// humanization; either field is omitted when empty, so a pre-#1410 event with
+// both empty yields "" and the caller drops the Type: line entirely.
+func externalType(source, eventType string) string {
 	var parts []string
 	if source != "" {
 		parts = append(parts, source)
@@ -95,7 +98,7 @@ func externalLabel(source, eventType string) string {
 	if eventType != "" {
 		parts = append(parts, eventType)
 	}
-	return strings.Join(parts, " · ")
+	return strings.Join(parts, " - ")
 }
 
 // renderDetails marshals an external event's opaque details map as one
