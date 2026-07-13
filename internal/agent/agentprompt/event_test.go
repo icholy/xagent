@@ -10,9 +10,9 @@ import (
 )
 
 // TestRenderEvent snapshots renderEvent across all five payload arms, one golden
-// per arm. The external arm is exercised both with source/type/data/details (the
-// worked example in the proposal) and without (a pre-#1410 event, where the
-// label line is omitted).
+// per arm. The external arm is exercised both with data/details (the worked
+// example in the proposal) and without; both carry source and type, as every
+// external event does in practice.
 // Regenerate the goldens with: go test ./internal/agent/agentprompt/ -run TestRenderEvent -update
 func TestRenderEvent(t *testing.T) {
 	t.Parallel()
@@ -39,11 +39,13 @@ func TestRenderEvent(t *testing.T) {
 			golden: "event-instruction.golden",
 		},
 		{
-			name: "external without source or type",
+			name: "external without data or details",
 			event: &xagentv1.Event{
 				Id:        42,
 				CreatedAt: at(0),
 				Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+					Source:      "github",
+					Type:        "review_requested",
 					Description: "PR review requested",
 					Url:         "https://github.com/icholy/xagent/pull/1394",
 				}},
