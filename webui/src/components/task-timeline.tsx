@@ -10,19 +10,16 @@ import {
   XCircle,
   Ban,
   Clock,
-  Link2,
   Info,
   Archive,
-  Bell,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { RelativeTime } from '@/components/relative-time'
-import { GithubIcon } from '@/components/github-icon'
-import { AtlassianIcon } from '@/components/atlassian-icon'
-import type { TimelineItem, LifecycleCategory, ExternalSource } from '@/lib/timeline'
+import { externalSourceStyle } from '@/components/external-source'
+import type { TimelineItem, LifecycleCategory } from '@/lib/timeline'
 
 // ----- top-level component ---------------------------------------------------
 
@@ -109,38 +106,14 @@ function InstructionRow({ item }: { item: Extract<TimelineItem, { kind: 'instruc
   )
 }
 
-const externalSource: Record<
-  ExternalSource,
-  { icon: React.ReactNode; label: string; marker: string }
-> = {
-  github: {
-    icon: <GithubIcon className="h-4 w-4" />,
-    label: 'GitHub',
-    marker: 'border-slate-300 bg-slate-100 text-slate-800',
-  },
-  jira: {
-    icon: <AtlassianIcon className="h-4 w-4" />,
-    label: 'Jira',
-    marker: 'border-blue-300 bg-blue-100 text-blue-700',
-  },
-  other: {
-    icon: <Bell className="h-4 w-4" />,
-    label: 'External',
-    marker: 'border-border bg-muted text-foreground',
-  },
-}
-
 function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' }> }) {
-  const src = externalSource[item.source]
+  const src = externalSourceStyle(item.source)
   return (
     <Row marker={<Marker className={src.marker}>{src.icon}</Marker>}>
       <div className="rounded-lg border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20">
         <div className="flex items-center gap-2 px-4 py-2 text-xs">
           <span className="font-medium text-foreground">Event</span>
-          <span className="text-muted-foreground">
-            · {src.label}
-            {item.type && ` · ${item.type}`}
-          </span>
+          <span className="text-muted-foreground">· {src.label}</span>
           {item.wakes && <WakeBadge />}
           <span className="ml-auto text-muted-foreground">
             <RelativeTime date={item.at} />
@@ -220,14 +193,7 @@ function LifecycleRow({ item }: { item: Extract<TimelineItem, { kind: 'lifecycle
 }
 
 function LinkRow({ item }: { item: Extract<TimelineItem, { kind: 'link' }> }) {
-  const icon =
-    item.source === 'github' ? (
-      <GithubIcon className="h-4 w-4" />
-    ) : item.source === 'jira' ? (
-      <AtlassianIcon className="h-4 w-4" />
-    ) : (
-      <Link2 className="h-4 w-4" />
-    )
+  const { icon } = externalSourceStyle(item.source)
   return (
     <Row marker={<Marker className="border-border bg-muted text-foreground">{icon}</Marker>}>
       <div className="rounded-lg border bg-card px-4 py-3">
