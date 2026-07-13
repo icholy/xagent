@@ -1,0 +1,14 @@
+### icholy commented on driver.go — 2023-11-14 22:20 UTC
+github · pull_request_review_comment
+Source: https://github.com/icholy/xagent/pull/1394#discussion_r512
+
+This nil check needs a test before we merge — can you add one that covers the wake path?
+
+```json
+{
+  "diff_hunk": "@@ -215,7 +215,7 @@ func Render(opts Options) {\n-\tTaskDetails: brief,\n+\tTaskDetails: details, // nil on wake",
+  "line": "218",
+  "path": "internal/agent/driver.go",
+  "side": "RIGHT"
+}
+```
