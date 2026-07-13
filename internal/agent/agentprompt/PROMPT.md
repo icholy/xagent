@@ -2,10 +2,10 @@
 {{- if .Events -}}
 # Task {{ .Task.GetId }} · {{ .Task.GetName }}
 
-The task received new events:
-{{ range .Events }}
-{{ renderEvent . }}
-{{ end }}
+Since your last run, the task received new events:
+
+{{ renderWake .Events }}
+
 Continue working on the task.
 {{- else -}}
 The task was updated. Continue.
@@ -13,10 +13,6 @@ The task was updated. Continue.
 {{- else -}}
 {{- if .TaskDetails -}}
 {{ renderHeader .TaskDetails.Task }}
-
-This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
-
-{{ RenderBrief .TaskDetails }}
 
 If the task does not have a name, use xagent:update_my_task to set one.
 
@@ -31,6 +27,10 @@ Use xagent:report to log important observations.
 If you need to re-check for updates mid-run, call xagent:get_my_task.
 
 Your text responses are NOT visible to users - only tool calls matter.
+
+This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
+
+{{ RenderBrief .TaskDetails }}
 {{- else -}}
 Use xagent:get_my_task to fetch your task instructions and execute them.
 If the task does not have a name, use xagent:update_my_task to set one.
