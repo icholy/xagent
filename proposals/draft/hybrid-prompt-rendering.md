@@ -2,10 +2,15 @@
 
 Issue: https://github.com/icholy/xagent/issues/1408
 
-Data-side companion: https://github.com/icholy/xagent/issues/1406 (reshapes the
-`GetTaskDetails` *data* to be event-native). This proposal is the **rendering**
-side: given the event-native data #1406 lands, how the prompt composes and
-renders it. It does **not** redesign the RPC.
+Data-side companions:
+- https://github.com/icholy/xagent/issues/1406 (reshapes the `GetTaskDetails`
+  *data* to be event-native).
+- https://github.com/icholy/xagent/issues/1410 (persists `source`/`type` on
+  `ExternalPayload`, which the renderer uses for the external-event label).
+
+This proposal is the **rendering** side: given the event-native data #1406 lands
+and the `source`/`type` fields #1410 adds, how the prompt composes and renders
+it. It does **not** redesign the RPC or the `ExternalPayload` proto.
 
 ## Problem
 
@@ -95,7 +100,7 @@ block. The mapping:
 | Arm | Header | Body | Footer |
 | --- | --- | --- | --- |
 | `instruction` | `### Instruction — {time}` | `text` | `Source: {url}` (if set) |
-| `external` | `### {description} — {time}` | `data` (if set) and the `details` map (if set), each as an indented-JSON block | `Source: {url}` (if set) |
+| `external` | `### {description} — {time}` + `{source} · {type}` label line (if set) | `data` content body (if set), then the `details` map (if set) as an indented-JSON block | `Source: {url}` (if set) |
 | `lifecycle` | `### {summary} — {time}` | — | — (actor already folded into `summary`) |
 | `link` | `### Link: {title} — {time}` | `relevance` | `{url}` · `(subscribed)` if `subscribe` |
 | `report` | `### Report — {time}` | `content` | — |
@@ -110,33 +115,51 @@ Notes:
   human line the timeline shows — so the model needn't decode an enum. This
   mirrors the `summary`-beside-structure decision in
   `event-native-mcp-tools.md`.
+- **`external` source/type label** (from #1410). #1410 adds `source` (e.g.
+  `github`, `jira`) and `type` (e.g. `issue_comment`,
+  `pull_request_review_comment`, `pull_request_review`, `issue_assigned`) string
+  fields to `ExternalPayload` — today the webhook captures them but the router
+  drops them, so the web UI timeline *guesses* the source by URL regex. When set,
+  the renderer prints a `{source} · {type}` label line under the header (source
+  display-name-cased — `github` → `GitHub` — with a raw fallback), so the model
+  sees *"GitHub · pull_request_review_comment"* instead of inferring it from the
+  URL. The label is omitted when the fields are empty (pre-#1410 events), so the
+  renderer degrades gracefully.
+- **`external.data`** is the content body of the event — the comment/review text
+  itself. It renders **as-is** (it is already prose/markdown) directly under the
+  label/`Source:` lines, so the model reads what the human actually wrote rather
+  than only a one-line `description`.
 - **`external.details`** is an **opaque map** — different external sources
   populate different keys (GitHub review comments set `path`/`line`/`side`/
   `diff_hunk`; other sources set their own or none), so the renderer cannot know
   which to promote. It renders the whole map as **one indented-JSON block** under
-  the event, untouched. This *is* the hybrid: the envelope (`### {description} —
-  {time}`, `Source:`) is prose markdown, and the opaque payload is JSON. See the
-  worked example below.
+  the content, untouched. This *is* the hybrid: the envelope (header, label,
+  `Source:`) and the `data` body are prose markdown, and the opaque `details`
+  payload is JSON. See the worked example below.
 - **`report`** never enters the brief today (reports are from-agent, not
   to-agent) but the renderer handles the arm so the same function can render a
   full timeline elsewhere without a second code path.
 
-#### Worked example: an external event carrying a `details` map
+#### Worked example: an external event with source/type, content, and `details`
 
-The richest case is a GitHub review comment, whose `ExternalPayload.details`
-carries `path` / `line` / `side` / `diff_hunk`. Today it renders as a nested
-protojson object inside the events array; the hybrid keeps a prose envelope and
-renders the opaque `details` map as one indented-JSON block:
+The richest case is a GitHub review comment: it carries a `source`/`type`
+(from #1410), a `data` content body (the comment text), and an opaque `details`
+map (`path`/`line`/`side`/`diff_hunk`). Today it renders as a nested protojson
+object inside the events array; the hybrid frames it in prose — labelled header,
+the comment text as-is — and renders only the opaque `details` map as JSON:
 
-**Before** (protojson, as the wake JSON array emits it):
+**Before** (protojson, as the wake JSON array emits it, with #1410's fields):
 
 ~~~~json
 {
   "id": "51",
   "createdAt": "2023-11-14T22:20:00Z",
   "external": {
+    "source": "github",
+    "type": "pull_request_review_comment",
     "description": "icholy commented on driver.go",
     "url": "https://github.com/icholy/xagent/pull/1394#discussion_r512",
+    "data": "This nil check needs a test before we merge — can you add one that covers the wake path?",
     "details": {
       "path": "internal/agent/driver.go",
       "line": "218",
@@ -147,11 +170,14 @@ renders the opaque `details` map as one indented-JSON block:
 }
 ~~~~
 
-**After** (hybrid — prose envelope, opaque `details` as indented JSON):
+**After** (hybrid — labelled prose envelope + content, opaque `details` as JSON):
 
 ~~~~
 ### icholy commented on driver.go — 2023-11-14 22:20 UTC
-External event. Source: https://github.com/icholy/xagent/pull/1394#discussion_r512
+GitHub · pull_request_review_comment
+Source: https://github.com/icholy/xagent/pull/1394#discussion_r512
+
+This nil check needs a test before we merge — can you add one that covers the wake path?
 
 ```json
 {
@@ -163,13 +189,17 @@ External event. Source: https://github.com/icholy/xagent/pull/1394#discussion_r5
 ```
 ~~~~
 
-The header, `Source:` line, and section framing stay markdown; the `details`
-map is emitted verbatim as an indented-JSON block (keys sorted by
-`json.MarshalIndent`). The renderer does not interpret the keys — no
-`diff_hunk`-to-fence promotion, no folding `side` into `line`, no per-key
-bullets — because `details` is source-defined and opaque. A GitHub source that
-sets `path`/`line` and a different source that sets entirely different keys both
-render correctly through the same untouched block.
+The header carries the `{source} · {type}` label (`GitHub ·
+pull_request_review_comment`) from #1410 instead of the model inferring the
+source from the URL; the `data` content body renders as-is so the model reads
+the actual comment; and only the opaque `details` map is emitted as an
+indented-JSON block (keys sorted by `json.MarshalIndent`). The renderer does not
+interpret the `details` keys — no `diff_hunk`-to-fence promotion, no folding
+`side` into `line`, no per-key bullets — because `details` is source-defined and
+opaque. A GitHub source that sets `path`/`line` and a different source that sets
+entirely different keys both render correctly through the same untouched block.
+When `source`/`type` are empty (pre-#1410 events), the label line is simply
+omitted.
 
 ### The converged structure
 
@@ -292,7 +322,8 @@ have everything you need and do not need to call get_my_task to begin.
 ## Context
 
 ### PR review requested — 2023-11-14 22:13 UTC
-External event. Source: https://github.com/icholy/xagent/pull/1394
+GitHub · pull_request_review
+Source: https://github.com/icholy/xagent/pull/1394
 
 ### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC
 The PR this task opened. https://github.com/icholy/xagent/pull/1394 (subscribed)
@@ -349,7 +380,8 @@ Since your last run, the task received new events:
 ## Context
 
 ### PR review requested — 2023-11-14 22:13 UTC
-External event. Source: https://github.com/icholy/xagent/pull/1394
+GitHub · pull_request_review
+Source: https://github.com/icholy/xagent/pull/1394
 
 ## Instructions
 
@@ -401,9 +433,13 @@ TestRenderGolden [-update]`). Layers land one at a time; the driver contract
 
 1. **Hybrid event renderer.** Delivers: `renderEvent(*Event) string` covering
    all five arms (table above), plus per-arm unit tests, plus the
-   human-timestamp formatter. Not yet wired into the template. Depends on:
-   nothing (works against the current `Event` proto). Verifiable by: table unit
-   tests, one per arm, asserting the markdown block for each.
+   human-timestamp formatter. The external arm renders the `{source} · {type}`
+   label when those fields are set and omits it otherwise, so this layer lands
+   against the current proto and the label simply lights up once #1410 populates
+   the fields. Not yet wired into the template. Depends on: nothing (works
+   against the current `Event` proto; #1410 is a soft dependency for the label
+   only). Verifiable by: table unit tests, one per arm, asserting the markdown
+   block for each — including an external event with and without source/type.
 
 2. **Wake path renders via `renderEvent`.** Delivers: the wake branch of
    `PROMPT.md` loops `renderEvent` instead of emitting a JSON array; add the
