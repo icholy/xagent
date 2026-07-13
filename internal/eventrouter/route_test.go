@@ -519,6 +519,8 @@ func TestRouteWakeEnabledRestartsTask(t *testing.T) {
 				Description: "PR comment from alice",
 				URL:         url,
 				Data:        "anything",
+				Source:      "github",
+				EventType:   "issue_comment",
 			},
 		},
 	)
@@ -625,7 +627,7 @@ func TestRouteCreateRuleSpawnsTask(t *testing.T) {
 	assert.DeepEqual(t,
 		model.FilterPayloads(externalEvents, model.EventTypeExternal),
 		[]model.EventPayload{
-			&model.ExternalPayload{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this"},
+			&model.ExternalPayload{Description: "alice commented on issue #1", URL: url, Data: "@icholy-bot please look at this", Source: "github", EventType: "issue_comment"},
 		},
 	)
 }

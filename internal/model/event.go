@@ -63,6 +63,14 @@ type ExternalPayload struct {
 	URL         string            `json:"url"`
 	Data        string            `json:"data"`
 	Details     map[string]string `json:"details,omitempty"`
+	// Source is the coarse origin (e.g. "github", "jira") and EventType the
+	// fine-grained event type (e.g. "issue_comment", "pull_request_review"),
+	// both copied from the router's InputEvent. Persisting them lets consumers
+	// pick an accurate icon/label instead of guessing from the URL. EventType is
+	// named to avoid colliding with the Type() discriminator method; it maps to
+	// the proto/json `type` field.
+	Source    string `json:"source,omitempty"`
+	EventType string `json:"type,omitempty"`
 }
 
 func (*ExternalPayload) Type() string    { return EventTypeExternal }
@@ -74,6 +82,8 @@ func (p *ExternalPayload) SetPayloadProto(pb *xagentv1.Event) {
 		Url:         p.URL,
 		Data:        p.Data,
 		Details:     p.Details,
+		Source:      p.Source,
+		Type:        p.EventType,
 	}}
 }
 
@@ -322,6 +332,8 @@ func EventPayloadFromProto(pb *xagentv1.Event) EventPayload {
 			URL:         arm.External.Url,
 			Data:        arm.External.Data,
 			Details:     arm.External.Details,
+			Source:      arm.External.Source,
+			EventType:   arm.External.Type,
 		}
 	case *xagentv1.Event_Report:
 		return &ReportPayload{

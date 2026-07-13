@@ -108,6 +108,8 @@ func TestTestEventFireCreatesTask(t *testing.T) {
 		URL:         url,
 		Data:        "xagent: do it",
 		Details:     details,
+		Source:      "github",
+		EventType:   "issue_comment",
 	})
 }
 
@@ -170,6 +172,8 @@ func TestTestEventFireWakesSubscribedTask(t *testing.T) {
 		URL:         url,
 		Data:        "xagent: again",
 		Details:     details,
+		Source:      "github",
+		EventType:   "issue_comment",
 	})
 }
 

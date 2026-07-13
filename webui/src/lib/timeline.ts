@@ -14,9 +14,10 @@ import { LifecycleKind } from '@/gen/xagent/v1/xagent_pb'
 import type { Event, LifecyclePayload } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 
-// The external service a URL points at — drives the icon shown for external
-// events and links. ExternalPayload/LinkPayload carry no source field, so it is
-// inferred from the URL.
+// The external service an event/link points at — drives the icon shown for
+// external events and links. External events persist a `source` field on
+// ExternalPayload (preferred); links have none, so their source is inferred
+// from the URL.
 export type ExternalSource = 'github' | 'jira' | 'other'
 
 // A coarse category for a lifecycle event, used only to pick an icon and tone.
@@ -47,6 +48,9 @@ export type TimelineItem =
       id: string
       at: Date
       source: ExternalSource
+      // The fine-grained event type persisted on the payload (e.g.
+      // "issue_comment", "pull_request_review"). Empty for pre-existing events.
+      type?: string
       description: string
       data?: string
       url?: string
@@ -80,11 +84,26 @@ export type TimelineItem =
       subscribed?: boolean
     }
 
-// Infer the external service from a URL.
+// Infer the external service from a URL. Used for links (which carry no source
+// field) and as a fallback for pre-existing external events persisted before
+// ExternalPayload gained a `source` field.
 export function sourceFromUrl(url: string): ExternalSource {
   if (/github\.com/i.test(url)) return 'github'
   if (/atlassian\.net|jira/i.test(url)) return 'jira'
   return 'other'
+}
+
+// Map the persisted ExternalPayload.source string onto the coarse ExternalSource
+// used for icon/label selection. Unknown/empty sources fall through to 'other'.
+export function sourceFromName(source: string): ExternalSource {
+  switch (source.toLowerCase()) {
+    case 'github':
+      return 'github'
+    case 'jira':
+      return 'jira'
+    default:
+      return 'other'
+  }
 }
 
 // lifecycleSummary turns a lifecycle event into a readable activity line, e.g.
@@ -186,7 +205,10 @@ export function eventsToTimeline(events: Event[]): TimelineItem[] {
           kind: 'external',
           id,
           at,
-          source: sourceFromUrl(v.url),
+          // Prefer the persisted source; fall back to the URL only for
+          // pre-existing events that predate the source field.
+          source: v.source ? sourceFromName(v.source) : sourceFromUrl(v.url),
+          type: v.type || undefined,
           description: v.description,
           data: v.data || undefined,
           url: v.url || undefined,
