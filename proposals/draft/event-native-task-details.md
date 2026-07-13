@@ -54,7 +54,7 @@ the survey — not an assumption — decides how far the proto can move.
 | Consumer | File | Reads from `Task` | Reads `events`? | Projects `instructions`? |
 |---|---|---|---|---|
 | `get_my_task` | `internal/agentmcp/xmcp.go:157` | `id, name, status, workspace, namespace, url` (thin subset) | yes (raw) | **yes** |
-| CLI `task list` | `internal/command/task_list.go:57` | `id, name, status` | yes (raw) | **yes** (duplicate) |
+| CLI `task list` | `internal/command/task_list.go:57` | `id, name, status` (from `ListTasks`) | **no** — the per-task `GetTaskDetails` fetch is dropped (see below) | **no** — projection falls away with the fetch |
 | `mcpserver.getTask` | `internal/server/mcpserver/mcpserver.go:184` | `id, name, workspace, runner, status, url` | instruction arm only, + separate `ListEventsByTask` for `logs` | **yes** (typed) |
 | webui task detail | `webui/src/routes/tasks.$id.tsx:83` | **the full fat `Task`** (see below) + `links` | **no** | no |
 | ~~First-run brief~~ | ~~`internal/agent/agentprompt`~~ | — | — | **migrated off the adapter (#1408/#1421)** — now markdown, not a JSON consumer |
@@ -154,11 +154,16 @@ the caller-shaped JSON the tool results emit. That validates the original
 divergence rationale (a readable brief vs. a machine-shaped tool result are not
 the same object) and takes the brief permanently out of scope here.
 
-What remains is the projected `instructions` key in the three JSON consumers.
-Each one **drops its own projection in place** — no new package, no shared
-`Render`, no abstraction to introduce. Each consumer keeps the local rendering it
-already has (its own protojson marshaling of header + `links` + `events`) and
-simply stops synthesizing the `instructions` key from the stream.
+What remains is the projected `instructions` key in the three JSON consumers, and
+each removes it **on its own terms** — no new package, no shared `Render`, no
+abstraction to introduce. `get_my_task` and `mcpserver.getTask` keep the local
+rendering they already have (their own protojson marshaling of header + `links` +
+`events`) and simply stop synthesizing the `instructions` key from the stream. CLI
+`task list` goes further: its projection is a symptom of an N+1 — it fetches
+`GetTaskDetails` per task purely to render a duplicate `instructions` (and
+`events`/`links` a list has no business showing), so it **drops the per-task fetch
+entirely** and renders header-only from `ListTasks`. The projection falls away
+with the call.
 
 This is deliberate. Collapsing the three into one shared renderer was considered
 and rejected: it would add a new proto-only package and a shared abstraction to
@@ -177,10 +182,12 @@ later (e.g. a third caller wants byte-identical output), it can be extracted the
    instruction-projection loop and the `"instructions"` map key; keep building the
    header + `links` + raw `events` map it already builds. Update the tool
    description.
-2. **CLI `task list`** — delete the inline `instructions` projection loop
-   (`task_list.go:56-64`) and the `"instructions"` map key (`task_list.go:82`);
-   keep the rest of the per-task flattening (header + `links` + raw `events`) as
-   is.
+2. **CLI `task list`** — drop the per-task `GetTaskDetails` fetch entirely (the
+   N+1 at `task_list.go:49-54`) along with its whole flattening loop
+   (`task_list.go:56-85`). Render header-only from the `ListTasks` response —
+   `id`/`name`/`status` — omitting the `instructions`/`events`/`links` detail. The
+   synthesized `instructions` just falls away with the fetch; per-task event/link
+   detail belongs in the task-detail view, not the list.
 3. **`mcpserver.getTask`** — this is a user-facing *debug* view, not an agent brief.
    Drop the synthesized `Instructions []instruction` field (`mcpserver.go:213`,
    projected at `:226-235`) and present the raw event stream instead. Today it
@@ -210,7 +217,8 @@ projection, not a wire field.
 ## Implementation Plan
 
 There is **no foundation slice** — no shared package to land first. Each consumer
-drops its own projection independently, so all three slices are fully independent
+removes its `instructions` projection independently (two drop it in place; `task
+list` drops the whole per-task fetch), so all three slices are fully independent
 and can land in any order or in parallel. The verification slice is likewise
 independent.
 
@@ -220,10 +228,12 @@ independent.
    nothing. Verifiable by: `agentmcp` test — `get_my_task` output contains no
    `instructions` key and carries the raw event stream.
 
-2. **Drop the projection in CLI `task list`** — Delivers: `task_list.go` no longer
-   builds or emits `instructions`; the per-task map is header + `links` + raw
-   `events`. Depends on: nothing. Verifiable by: running `xagent task list` —
-   output has raw `events`, no `instructions` key.
+2. **Drop the per-task fetch in CLI `task list`** — Delivers: `task_list.go` no
+   longer calls `GetTaskDetails` per task; it renders header-only from `ListTasks`
+   (`id`/`name`/`status`), removing the N+1 along with the `instructions`
+   projection and the `events`/`links` detail. Depends on: nothing. Verifiable by:
+   running `xagent task list` — output is the per-task header, one `ListTasks` call,
+   no `instructions` key.
 
 3. **Drop the projection in `mcpserver.getTask`** — Delivers: `getTask` drops the
    synthesized `Instructions` field and presents a raw `events` array beside the
@@ -268,10 +278,6 @@ independent.
 
 ## Open Questions
 
-- **CLI `task list` N+1.** `task list` calls `GetTaskDetails` once per task purely
-  to render `events`/`links`. Out of scope here, but the event-native cleanup
-  invites a follow-up: either drop the per-task detail fetch (list only needs the
-  header) or add a batch endpoint. Flagging, not solving.
 - **`mcpserver.getTask` shape.** With the synthesized `Instructions` field gone,
   should the debug view keep its typed struct (adding a raw `events` field) or
   switch to a map matching the agent-facing shape? And should the raw `events`
