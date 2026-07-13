@@ -213,15 +213,23 @@ func (d *Driver) runAgent(ctx context.Context, task *xagentv1.Task) error {
 	}
 	defer a.Close()
 
-	// Bootstrap prompt. The events drained above are injected into the wake branch
-	// of the template (rendered there as markdown blocks by the renderEvent func);
-	// the first run and a wake with nothing pending render without them.
+	// Compose the prompt's event stream so the template loops it once, the same way
+	// on both paths. On a wake it is the events drained above (rendered as markdown
+	// blocks by the renderEvent func); on the first run it is the brief's full event
+	// stream, plus the task's standing links. A wake with nothing pending renders
+	// without either.
+	promptEvents := events
+	var promptLinks []*xagentv1.TaskLink
+	if !cfg.Started {
+		promptEvents = details.GetEvents()
+		promptLinks = details.GetLinks()
+	}
 	prompt, err := agentprompt.Render(agentprompt.Options{
-		Started:     cfg.Started,
-		Prompt:      cfg.Prompt,
-		Events:      events,
-		Task:        task,    // header line on the wake branch
-		TaskDetails: details, // nil on wake
+		Started: cfg.Started,
+		Prompt:  cfg.Prompt,
+		Task:    task, // header line, and gates the first-run brief
+		Events:  promptEvents,
+		Links:   promptLinks,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build prompt: %w", err)

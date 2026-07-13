@@ -51,7 +51,8 @@ func TestRenderGolden(t *testing.T) {
 		Url:       "https://xagent.choly.ca/ui/tasks/1302",
 	}
 	// A field-complete brief: named task with url/namespace, an instruction event,
-	// an external event, and a link. Exercises every field RenderBrief carries.
+	// an external event, and a link. Exercises every field the first-run brief
+	// renders (Task, Events, Links).
 	brief := &xagentv1.GetTaskDetailsResponse{
 		Task: &xagentv1.Task{
 			Id:        1302,
@@ -103,7 +104,7 @@ func TestRenderGolden(t *testing.T) {
 		},
 		{
 			name:   "first run renders the task brief",
-			opts:   Options{TaskDetails: brief},
+			opts:   Options{Task: brief.Task, Events: brief.Events, Links: brief.Links},
 			golden: "prompt-first-run-brief.golden",
 		},
 		{
