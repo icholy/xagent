@@ -15,7 +15,7 @@ import (
 // renderHeader renders the task header block: the `# Task {id} · {name}` title
 // plus the workspace/namespace and task url lines. It deliberately omits status
 // — a task reading this prompt is by definition running, so status is noise (see
-// proposals/draft/hybrid-prompt-rendering.md). The returned block has no
+// proposals/implemented/hybrid-prompt-rendering.md). The returned block has no
 // trailing newline; callers join blocks with blank lines. Nil-safe via the
 // proto getters.
 func renderHeader(task *xagentv1.Task) string {
@@ -51,8 +51,7 @@ var promptTemplate = template.Must(
 // Options are the inputs to Render.
 type Options struct {
 	// Started reports whether the task has run before. The first run renders the
-	// task brief (or the get_my_task bootstrap fallback); a subsequent run renders
-	// the wake branch.
+	// task brief; a subsequent run renders the wake branch.
 	Started bool
 	// Prompt is the workspace prompt appended at the end, if any.
 	Prompt string
@@ -60,9 +59,8 @@ type Options struct {
 	// Task carries the id and name rendered into the wake header line
 	// (`# Task {id} · {name}`) and the full first-run header (renderHeader). It is
 	// the task the driver already fetched at the top of the run, so neither path
-	// needs an extra fetch. On the first run it also gates the brief against the
-	// get_my_task bootstrap fallback: a nil Task renders the bootstrap. The proto
-	// getters are nil-safe, so a nil Task renders zero values rather than panicking.
+	// needs an extra fetch. The proto getters are nil-safe, so a nil Task renders
+	// zero values rather than panicking.
 	Task *xagentv1.Task
 
 	// Events is the task's event stream, looped once by the shared template loop and

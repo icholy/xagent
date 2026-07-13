@@ -11,46 +11,21 @@ Continue working on the task.
 The task was updated. Continue.
 {{- end -}}
 {{- else -}}
-{{- if .Task -}}
 {{ renderHeader .Task }}
 
+## How to work this task
 If the task does not have a name, use xagent:update_my_task to set one.
-
-If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.
-When responding on external platforms, always suffix your message with (task {id}) with your task id.
-
-When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use subscribe=false for reference links to external resources you didn't create.
-
-When done, use xagent:create_link for any URLs you created (PRs, issues, etc).
-Always use web URLs that users can visit, not API URLs.
-Use xagent:report to log important observations.
+If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url, suffixing your message with (task {{ .Task.GetId }}).
+When you create a resource (PR, issue, comment), record it with xagent:create_link and subscribe=true so you receive replies, even after the task is complete. Use subscribe=false only for reference links you didn't create.
+Prefer web URLs a user can visit over API URLs.
+Use xagent:report to log important observations. Your text responses are not visible to users — only tool calls are.
 If you need to re-check for updates mid-run, call xagent:get_my_task.
-
-Your text responses are NOT visible to users - only tool calls matter.
 
 This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.{{ range .Events }}
 
 {{ renderEvent . }}{{ end }}{{ range .Links }}
 
 {{ renderLink . }}{{ end }}
-{{- else -}}
-Use xagent:get_my_task to fetch your task instructions and execute them.
-If the task does not have a name, use xagent:update_my_task to set one.
-
-Each instruction has a 'text' field with the task and an optional 'url' field with the source URL.
-If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.
-When responding on external platforms, always suffix your message with (task {id}) with your task id.
-
-The task may have linked events. Events provide additional context such as GitHub webhooks or external triggers.
-Events are routed to tasks that have a link with subscribe=true matching the event URL.
-When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use subscribe=false for reference links to external resources you didn't create.
-
-When done, use xagent:create_link for any URLs you created (PRs, issues, etc).
-Always use web URLs that users can visit, not API URLs.
-Use xagent:report to log important observations.
-
-Your text responses are NOT visible to users - only tool calls matter.
-{{- end -}}
 {{- end -}}
 {{- if .Prompt}}
 

@@ -12,7 +12,7 @@ import (
 // renderEvent renders a single event as a prose-framed markdown block. It
 // switches on the set payload arm and emits a header line (`### … — {time}`)
 // plus an arm-specific body/footer, per the mapping in
-// proposals/draft/hybrid-prompt-rendering.md. It is the hybrid renderer: the
+// proposals/implemented/hybrid-prompt-rendering.md. It is the hybrid renderer: the
 // envelope (header, external label, Source: line) and the external content body
 // are prose markdown, while the opaque external details map is emitted verbatim
 // as an indented-JSON block. The returned block has no trailing newline; callers
@@ -60,9 +60,9 @@ func renderEvent(event *xagentv1.Event) string {
 // linkBlock formats a link as the shared `### Link: {title} — {time}` /
 // relevance / url · (subscribed) block. It is the one formatter behind both the
 // renderEvent link arm (over a LinkPayload) and the task's standing links (over
-// *TaskLink) rendered under ## Context, so the two emit byte-identical blocks.
-// The returned block has no trailing newline; callers join blocks with blank
-// lines.
+// *TaskLink) appended at the end of the first-run brief, so the two emit
+// byte-identical blocks. The returned block has no trailing newline; callers
+// join blocks with blank lines.
 func linkBlock(title, ts, relevance, url string, subscribe bool) string {
 	var b strings.Builder
 	b.WriteString("### Link: " + title + " — " + ts + "\n")

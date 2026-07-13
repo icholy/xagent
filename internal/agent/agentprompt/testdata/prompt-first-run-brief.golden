@@ -3,19 +3,13 @@
 - Workspace: xagent · Namespace: team-core
 - Task: https://xagent.choly.ca/ui/tasks/1302
 
+## How to work this task
 If the task does not have a name, use xagent:update_my_task to set one.
-
-If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url.
-When responding on external platforms, always suffix your message with (task {id}) with your task id.
-
-When creating links with xagent:create_link, ALWAYS set subscribe=true for resources you create (PRs, issues, comments), even if the task is complete. Others may respond and you'll need to handle those responses. Only use subscribe=false for reference links to external resources you didn't create.
-
-When done, use xagent:create_link for any URLs you created (PRs, issues, etc).
-Always use web URLs that users can visit, not API URLs.
-Use xagent:report to log important observations.
+If you have questions, problems, or take no action, respond on the platform from the most recent instruction or event url, suffixing your message with (task 1302).
+When you create a resource (PR, issue, comment), record it with xagent:create_link and subscribe=true so you receive replies, even after the task is complete. Use subscribe=false only for reference links you didn't create.
+Prefer web URLs a user can visit over API URLs.
+Use xagent:report to log important observations. Your text responses are not visible to users — only tool calls are.
 If you need to re-check for updates mid-run, call xagent:get_my_task.
-
-Your text responses are NOT visible to users - only tool calls matter.
 
 This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
 

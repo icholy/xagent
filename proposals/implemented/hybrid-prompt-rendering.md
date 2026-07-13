@@ -12,6 +12,28 @@ This proposal is the **rendering** side: given the event-native data #1406 lands
 and the `source`/`type` fields #1410 adds, how the prompt composes and renders
 it. It does **not** redesign the RPC or the `ExternalPayload` proto.
 
+## As shipped
+
+Shipped as the layer-cake effort #1408 (L1–L5). Two deliberate divergences from
+the design below:
+
+- **Flat event stream, not a `## Context` / `## Instructions` partition.** The
+  design partitions the stream by arm — context (external, lifecycle, report)
+  under `## Context`, instructions last under `## Instructions`. As shipped,
+  both the brief and the wake render a single **flat `renderEvent` stream** in
+  stream order, with no section headers. The partition (and its splitter helper)
+  was dropped: the per-event `### …` headers already frame each block, the
+  per-event timestamps preserve true order, and one flat loop keeps init and
+  wake byte-identical without a re-bucketing step. The standing links are
+  appended at the end of the first-run brief rather than folded into a
+  `## Context` group.
+- **`Options` flattened into one shared event loop (follow-up #1421).** Rather
+  than threading separate init/wake event collections, `Options` is
+  `{Started, Prompt, Task, Events, Links}` and both paths share one
+  `{{ range .Events }}` loop over `renderEvent`. The dead `RenderEvent` /
+  `renderMessage` helpers and, in L5, the confirmed-dead `get_my_task` bootstrap
+  fallback arm were removed; the first run always renders the brief (nil-safe).
+
 ## Problem
 
 The bootstrap prompt the driver hands the agent (`internal/agent/agentprompt`)
