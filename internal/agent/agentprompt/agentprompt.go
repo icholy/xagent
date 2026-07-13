@@ -5,90 +5,12 @@ package agentprompt
 
 import (
 	_ "embed"
-	"encoding/json"
 	"strconv"
 	"strings"
 	"text/template"
 
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
-
-// renderMessage marshals a single proto message to normalized, indented JSON. It
-// protojson-marshals the message, then re-indents through json.MarshalIndent:
-// protojson deliberately varies its inter-token whitespace per process, and
-// routing through encoding/json normalizes it away so the output is
-// deterministic. This is the shared normalization RenderEvent and RenderBrief
-// both build on.
-func renderMessage(m proto.Message) (json.RawMessage, error) {
-	data, err := protojson.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-	out, err := json.MarshalIndent(json.RawMessage(data), "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(out), nil
-}
-
-// RenderEvent marshals a single event to indented JSON. It reuses renderMessage —
-// the same normalization path get_my_task's taskDetailsToMap takes — so an
-// injected event is byte-for-byte the shape it has in the get_my_task events
-// array (the agent parses one format, not two) and is deterministic. Registered
-// as the RenderEvent template func; PROMPT.md loops over the events and joins the
-// rendered objects into a JSON array.
-func RenderEvent(event *xagentv1.Event) (string, error) {
-	out, err := renderMessage(event)
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
-}
-
-// RenderBrief renders the body of a task's first-run brief: the raw event stream
-// as a flat renderEvent list in stream order, followed by the task's standing
-// links. It reads the event-native GetTaskDetailsResponse directly and no longer
-// emits the flattened taskDetailsToMap JSON blob or the duplicated instructions
-// projection; the instruction appears once, as an instruction event through
-// renderEvent. The header, how-to-work guidance, and framing sentence are
-// rendered by PROMPT.md so the prose lives in the template.
-//
-// It shares renderStream with the wake path (renderWake) — the only difference
-// is that the brief carries links, which the wake path omits. It is nil-safe: a
-// nil resp renders an empty string.
-func RenderBrief(resp *xagentv1.GetTaskDetailsResponse) string {
-	return renderStream(resp.GetEvents(), resp.GetLinks())
-}
-
-// renderWake renders the wake update's event stream through the same flat
-// renderStream as RenderBrief, but without links: a wake resumes the same
-// session, which already saw the links on its first turn.
-func renderWake(events []*xagentv1.Event) string {
-	return renderStream(events, nil)
-}
-
-// renderStream renders an event stream as a flat list of renderEvent markdown
-// blocks in stream order, joined by blank lines. Links (init only) append at the
-// end via the shared linkBlock formatter, since a wake resumes a session that
-// already saw them. Both the first-run brief and the wake update render through
-// this one function. Events with no set arm render empty and are dropped, so the
-// blocks are always cleanly blank-line separated.
-func renderStream(events []*xagentv1.Event, links []*xagentv1.TaskLink) string {
-	var blocks []string
-	for _, event := range events {
-		if block := renderEvent(event); block != "" {
-			blocks = append(blocks, block)
-		}
-	}
-	for _, link := range links {
-		blocks = append(blocks, linkBlock(
-			link.GetTitle(), formatEventTime(link.GetCreatedAt()),
-			link.GetRelevance(), link.GetUrl(), link.GetSubscribe()))
-	}
-	return strings.Join(blocks, "\n\n")
-}
 
 // renderHeader renders the task header block: the `# Task {id} · {name}` title
 // plus the workspace/namespace and task url lines. It deliberately omits status
@@ -104,43 +26,56 @@ func renderHeader(task *xagentv1.Task) string {
 	return b.String()
 }
 
+// renderLink renders a task's standing link through the shared linkBlock
+// formatter, so a link listed under the first-run brief is byte-identical to the
+// same link rendered inline as an event's link arm. Registered as the renderLink
+// template func; the init branch loops over Options.Links. Nil-safe via the
+// proto getters.
+func renderLink(link *xagentv1.TaskLink) string {
+	return linkBlock(
+		link.GetTitle(), formatEventTime(link.GetCreatedAt()),
+		link.GetRelevance(), link.GetUrl(), link.GetSubscribe())
+}
+
 //go:embed PROMPT.md
 var promptText string
 
 var promptTemplate = template.Must(
 	template.New("prompt").Funcs(template.FuncMap{
-		"RenderEvent":  RenderEvent,
 		"renderEvent":  renderEvent,
 		"renderHeader": renderHeader,
-		"RenderBrief":  RenderBrief,
-		"renderWake":   renderWake,
+		"renderLink":   renderLink,
 	}).Parse(promptText),
 )
 
 // Options are the inputs to Render.
 type Options struct {
 	// Started reports whether the task has run before. The first run renders the
-	// get_my_task bootstrap; a subsequent run renders the wake branch.
+	// task brief (or the get_my_task bootstrap fallback); a subsequent run renders
+	// the wake branch.
 	Started bool
 	// Prompt is the workspace prompt appended at the end, if any.
 	Prompt string
-	// Events is the instruction + external events since the saved cursor. The wake
-	// branch of the template loops over them, rendering each as a markdown block
-	// via the renderEvent func. It is empty on the first run and on a wake with
-	// nothing pending, in which case nothing is injected.
-	Events []*xagentv1.Event
 
 	// Task carries the id and name rendered into the wake header line
-	// (`# Task {id} · {name}`). It is the task the driver already fetched at the
-	// top of the run, so the wake path needs no extra fetch. The proto getters are
-	// nil-safe, so a nil Task renders zero values rather than panicking.
+	// (`# Task {id} · {name}`) and the full first-run header (renderHeader). It is
+	// the task the driver already fetched at the top of the run, so neither path
+	// needs an extra fetch. On the first run it also gates the brief against the
+	// get_my_task bootstrap fallback: a nil Task renders the bootstrap. The proto
+	// getters are nil-safe, so a nil Task renders zero values rather than panicking.
 	Task *xagentv1.Task
 
-	// TaskDetails is the full task brief rendered into the first-run prompt in
-	// place of the get_my_task bootstrap instruction. It is nil on wake runs
-	// (Started == true), where the wake branch renders Events instead. RenderBrief
-	// is nil-safe, so a nil value renders an empty brief rather than panicking.
-	TaskDetails *xagentv1.GetTaskDetailsResponse
+	// Events is the task's event stream, looped once by the shared template loop and
+	// rendered as markdown blocks via the renderEvent func. On a wake it is the
+	// instruction + external events drained since the saved cursor; on the first run
+	// it is the brief's full event stream. It is empty on a wake with nothing
+	// pending, in which case nothing is injected.
+	Events []*xagentv1.Event
+
+	// Links are the task's standing links, rendered at the end of the first-run
+	// brief via the renderLink func. They are init-only: a wake resumes the same
+	// session, which already saw the links on its first turn.
+	Links []*xagentv1.TaskLink
 }
 
 // Render builds the bootstrap prompt sent to the agent from opts.
