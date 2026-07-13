@@ -20,14 +20,14 @@ When you create a resource (PR, issue, comment), record it with xagent:create_li
 Prefer web URLs a user can visit over API URLs.
 Use xagent:report to log important observations. Your text responses are not visible to users — only tool calls are.
 If you need to re-check for updates mid-run, call xagent:get_my_task.
+{{- if .Prompt}}
+
+{{ .Prompt }}
+{{- end }}
 
 This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.{{ range .Events }}
 
 {{ renderEvent . }}{{ end }}{{ range .Links }}
 
 {{ renderLink . }}{{ end }}
-{{- if .Prompt}}
-
-{{ .Prompt }}
-{{- end -}}
 {{- end -}}
