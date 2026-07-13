@@ -3,7 +3,8 @@ import type { DescMethodUnary } from '@bufbuild/protobuf'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { createConnectQueryKey } from '@connectrpc/connect-query'
 import {
-  getTaskDetails,
+  getTask,
+  listLinks,
   listTasks,
   listExternalEvents,
   getEvent,
@@ -25,7 +26,7 @@ function invalidateResource(
     case 'task':
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
-          schema: getTaskDetails,
+          schema: getTask,
           input: { id: BigInt(r.id) },
           cardinality: 'finite',
         }),
@@ -45,8 +46,8 @@ function invalidateResource(
     case 'task_links':
       qc.invalidateQueries({
         queryKey: createConnectQueryKey({
-          schema: getTaskDetails,
-          input: { id: BigInt(r.id) },
+          schema: listLinks,
+          input: { taskId: BigInt(r.id) },
           cardinality: 'finite',
         }),
       })
@@ -91,7 +92,8 @@ function invalidateResource(
 // routinely (network blips, tab background→foreground), so it catches up via a
 // single tail-follow (notifyAll) instead.
 const RECONNECT_SCHEMAS: DescMethodUnary[] = [
-  getTaskDetails,
+  getTask,
+  listLinks,
   listTasks,
   listExternalEvents,
   getEvent,

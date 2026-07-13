@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 // TaskLinksTab is the read-only Links tab body: a list of the task's links
 // (PRs, issues, tickets) with a source icon and a badge marking which are
-// subscriptions. It binds directly to getTaskDetails.links — no mutations.
+// subscriptions. It binds directly to listLinks.links — no mutations.
 export function TaskLinksTab({ links }: { links: TaskLink[] }) {
   if (links.length === 0) {
     return (
