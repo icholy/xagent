@@ -95,7 +95,7 @@ block. The mapping:
 | Arm | Header | Body | Footer |
 | --- | --- | --- | --- |
 | `instruction` | `### Instruction — {time}` | `text` | `Source: {url}` (if set) |
-| `external` | `### {description} — {time}` | opaque `data` in a fenced block (if set); `details` as sub-bullets (if set) | `Source: {url}` (if set) |
+| `external` | `### {description} — {time}` | `data` (if set) and the `details` map (if set), each as an indented-JSON block | `Source: {url}` (if set) |
 | `lifecycle` | `### {summary} — {time}` | — | — (actor already folded into `summary`) |
 | `link` | `### Link: {title} — {time}` | `relevance` | `{url}` · `(subscribed)` if `subscribe` |
 | `report` | `### Report — {time}` | `content` | — |
@@ -110,12 +110,13 @@ Notes:
   human line the timeline shows — so the model needn't decode an enum. This
   mirrors the `summary`-beside-structure decision in
   `event-native-mcp-tools.md`.
-- **`external.details`** (GitHub review comments populate `path`/`line`/`side`/
-  `diff_hunk`) render as a small sub-bullet list, with `diff_hunk` promoted to a
-  fenced ```diff block. This is the **hybrid** point: structure that is genuinely
-  structured stays structured (a fenced diff hunk is more useful as a fenced
-  block than as a JSON string), but the *envelope* around it is prose, not a JSON
-  object. See the worked example below.
+- **`external.details`** is an **opaque map** — different external sources
+  populate different keys (GitHub review comments set `path`/`line`/`side`/
+  `diff_hunk`; other sources set their own or none), so the renderer cannot know
+  which to promote. It renders the whole map as **one indented-JSON block** under
+  the event, untouched. This *is* the hybrid: the envelope (`### {description} —
+  {time}`, `Source:`) is prose markdown, and the opaque payload is JSON. See the
+  worked example below.
 - **`report`** never enters the brief today (reports are from-agent, not
   to-agent) but the renderer handles the arm so the same function can render a
   full timeline elsewhere without a second code path.
@@ -124,12 +125,12 @@ Notes:
 
 The richest case is a GitHub review comment, whose `ExternalPayload.details`
 carries `path` / `line` / `side` / `diff_hunk`. Today it renders as a nested
-JSON object; the hybrid renders a prose envelope with the structured bits as
-sub-bullets and the hunk as a fenced diff:
+protojson object inside the events array; the hybrid keeps a prose envelope and
+renders the opaque `details` map as one indented-JSON block:
 
 **Before** (protojson, as the wake JSON array emits it):
 
-```json
+~~~~json
 {
   "id": "51",
   "createdAt": "2023-11-14T22:20:00Z",
@@ -144,29 +145,31 @@ sub-bullets and the hunk as a fenced diff:
     }
   }
 }
-```
+~~~~
 
-**After** (hybrid):
+**After** (hybrid — prose envelope, opaque `details` as indented JSON):
 
-```
+~~~~
 ### icholy commented on driver.go — 2023-11-14 22:20 UTC
 External event. Source: https://github.com/icholy/xagent/pull/1394#discussion_r512
-- path: internal/agent/driver.go
-- line: 218 (RIGHT)
 
-```diff
-@@ -215,7 +215,7 @@ func Render(opts Options) {
--	TaskDetails: brief,
-+	TaskDetails: details, // nil on wake
+```json
+{
+  "diff_hunk": "@@ -215,7 +215,7 @@ func Render(opts Options) {\n-\tTaskDetails: brief,\n+\tTaskDetails: details, // nil on wake",
+  "line": "218",
+  "path": "internal/agent/driver.go",
+  "side": "RIGHT"
+}
 ```
-```
+~~~~
 
-The `path`/`line`/`side` keys collapse into two readable bullets (`side`
-folded into the line as `218 (RIGHT)`), and `diff_hunk` — the one genuinely
-structured value — becomes a fenced ```diff block the model reads as code rather
-than as an escaped `\n`-laden JSON string. Unknown/other `details` keys fall
-back to plain `- key: value` bullets, so a source that sets its own keys still
-renders sanely without the renderer knowing them.
+The header, `Source:` line, and section framing stay markdown; the `details`
+map is emitted verbatim as an indented-JSON block (keys sorted by
+`json.MarshalIndent`). The renderer does not interpret the keys — no
+`diff_hunk`-to-fence promotion, no folding `side` into `line`, no per-key
+bullets — because `details` is source-defined and opaque. A GitHub source that
+sets `path`/`line` and a different source that sets entirely different keys both
+render correctly through the same untouched block.
 
 ### The converged structure
 
@@ -448,10 +451,10 @@ cashes that in.
 
 **Full prose vs. hybrid.** A pure-prose narrative reads smoothly for one event
 but gets ambiguous across many, and it discards fields a model wants verbatim
-(URLs, diff hunks, status transitions). The hybrid keeps prose *framing* while
-leaving genuinely structured payloads (external `details`, opaque `data`,
-lifecycle transitions) as markdown structure. Rejected pure prose for fidelity;
-rejected pure JSON for readability.
+(URLs, diff hunks, status transitions). The hybrid keeps prose *framing* around
+each event and renders the opaque bits (external `details`, `data`) as JSON
+verbatim rather than trying to prettify keys it can't know. Rejected pure prose
+for fidelity; rejected pure JSON for readability.
 
 **One template vs. two.** Converging means one template must branch internally
 (full-vs-new slice, trailer-or-not). That's a little more conditional logic in
