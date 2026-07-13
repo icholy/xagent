@@ -1,6 +1,8 @@
-### icholy commented on driver.go — 2023-11-14 22:20 UTC
-github · pull_request_review_comment
-Source: https://github.com/icholy/xagent/pull/1394#discussion_r512
+### External Event — 2023-11-14 22:20 UTC
+
+Type: github - pull_request_review_comment
+Description: icholy commented on driver.go
+URL: https://github.com/icholy/xagent/pull/1394#discussion_r512
 
 This nil check needs a test before we merge — can you add one that covers the wake path?
 

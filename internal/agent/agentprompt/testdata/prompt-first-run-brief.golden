@@ -17,8 +17,10 @@ This is your first run on this task. Its full context is below — you already h
 Implement the first-run brief.
 Source: https://github.com/icholy/xagent/issues/1398
 
-### PR review requested — 2023-11-14 22:13 UTC
-Source: https://github.com/icholy/xagent/pull/1394
+### External Event — 2023-11-14 22:13 UTC
+
+Description: PR review requested
+URL: https://github.com/icholy/xagent/pull/1394
 
 ### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC
 the PR this task opened
