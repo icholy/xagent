@@ -1,14 +1,11 @@
 {{- if .Started -}}
 {{- if .Events -}}
+# Task {{ .Task.GetId }} · {{ .Task.GetName }}
+
 The task received new events:
-
-[
-{{- range $i, $event := .Events }}
-{{- if $i }},{{ end }}
-{{ RenderEvent $event }}
-{{- end }}
-]
-
+{{ range .Events }}
+{{ renderEvent . }}
+{{ end }}
 Continue working on the task.
 {{- else -}}
 The task was updated. Continue.

@@ -115,6 +115,7 @@ var promptText string
 var promptTemplate = template.Must(
 	template.New("prompt").Funcs(template.FuncMap{
 		"RenderEvent": RenderEvent,
+		"renderEvent": renderEvent,
 		"RenderBrief": RenderBrief,
 	}).Parse(promptText),
 )
@@ -127,10 +128,16 @@ type Options struct {
 	// Prompt is the workspace prompt appended at the end, if any.
 	Prompt string
 	// Events is the instruction + external events since the saved cursor. The wake
-	// branch of the template loops over them, rendering each via the RenderEvent
-	// func. It is empty on the first run and on a wake with nothing pending, in
-	// which case nothing is injected.
+	// branch of the template loops over them, rendering each as a markdown block
+	// via the renderEvent func. It is empty on the first run and on a wake with
+	// nothing pending, in which case nothing is injected.
 	Events []*xagentv1.Event
+
+	// Task carries the id and name rendered into the wake header line
+	// (`# Task {id} · {name}`). It is the task the driver already fetched at the
+	// top of the run, so the wake path needs no extra fetch. The proto getters are
+	// nil-safe, so a nil Task renders zero values rather than panicking.
+	Task *xagentv1.Task
 
 	// TaskDetails is the full task brief rendered into the first-run prompt in
 	// place of the get_my_task bootstrap instruction. It is nil on wake runs
