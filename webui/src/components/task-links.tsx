@@ -1,12 +1,9 @@
-import { Link2 } from 'lucide-react'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import type { TaskLink } from '@/gen/xagent/v1/xagent_pb'
 import { sourceFromUrl } from '@/lib/timeline'
-import type { ExternalSource } from '@/lib/timeline'
+import { externalSourceStyle } from '@/components/external-source'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { GithubIcon } from '@/components/github-icon'
-import { AtlassianIcon } from '@/components/atlassian-icon'
 
 // TaskLinksTab is the read-only Links tab body: a list of the task's links
 // (PRs, issues, tickets) with a source icon and a badge marking which are
@@ -37,23 +34,12 @@ function sortKey(link: TaskLink): number {
   return link.createdAt ? timestampDate(link.createdAt).getTime() : 0
 }
 
-function sourceIcon(source: ExternalSource) {
-  switch (source) {
-    case 'github':
-      return <GithubIcon className="h-4 w-4" />
-    case 'jira':
-      return <AtlassianIcon className="h-4 w-4" />
-    default:
-      return <Link2 className="h-4 w-4" />
-  }
-}
-
 function LinkRow({ link }: { link: TaskLink }) {
-  const source = sourceFromUrl(link.url)
+  const { icon } = externalSourceStyle(sourceFromUrl(link.url))
   return (
     <li className="flex items-start gap-3 px-4 py-3">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground">
-        {sourceIcon(source)}
+        {icon}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">

@@ -14,12 +14,6 @@ import { LifecycleKind } from '@/gen/xagent/v1/xagent_pb'
 import type { Event, LifecyclePayload } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 
-// The external service an event/link points at — drives the icon shown for
-// external events and links. External events persist a `source` field on
-// ExternalPayload (preferred); links have none, so their source is inferred
-// from the URL.
-export type ExternalSource = 'github' | 'jira' | 'other'
-
 // A coarse category for a lifecycle event, used only to pick an icon and tone.
 // The precise wording lives in the event's `summary` string.
 export type LifecycleCategory =
@@ -47,10 +41,10 @@ export type TimelineItem =
       kind: 'external'
       id: string
       at: Date
-      source: ExternalSource
-      // The fine-grained event type persisted on the payload (e.g.
-      // "issue_comment", "pull_request_review"). Empty for pre-existing events.
-      type?: string
+      // The raw ExternalPayload.source string (e.g. "github", "jira"). Empty for
+      // pre-existing events; the icon/label picker maps it, defaulting to a
+      // generic "External" style.
+      source: string
       description: string
       data?: string
       url?: string
@@ -79,31 +73,20 @@ export type TimelineItem =
       at: Date
       title: string
       url: string
-      source: ExternalSource
+      // Links carry no persisted source (LinkPayload has none), so it is
+      // inferred from the URL via sourceFromUrl.
+      source: string
       relevance?: string
       subscribed?: boolean
     }
 
-// Infer the external service from a URL. Used for links (which carry no source
-// field) and as a fallback for pre-existing external events persisted before
-// ExternalPayload gained a `source` field.
-export function sourceFromUrl(url: string): ExternalSource {
+// Infer the external service from a URL, returning a source string keyed the
+// same way as the persisted ExternalPayload.source. Used only for links, which
+// carry no source field (LinkPayload has none).
+export function sourceFromUrl(url: string): string {
   if (/github\.com/i.test(url)) return 'github'
   if (/atlassian\.net|jira/i.test(url)) return 'jira'
   return 'other'
-}
-
-// Map the persisted ExternalPayload.source string onto the coarse ExternalSource
-// used for icon/label selection. Unknown/empty sources fall through to 'other'.
-export function sourceFromName(source: string): ExternalSource {
-  switch (source.toLowerCase()) {
-    case 'github':
-      return 'github'
-    case 'jira':
-      return 'jira'
-    default:
-      return 'other'
-  }
 }
 
 // lifecycleSummary turns a lifecycle event into a readable activity line, e.g.
@@ -205,10 +188,9 @@ export function eventsToTimeline(events: Event[]): TimelineItem[] {
           kind: 'external',
           id,
           at,
-          // Prefer the persisted source; fall back to the URL only for
-          // pre-existing events that predate the source field.
-          source: v.source ? sourceFromName(v.source) : sourceFromUrl(v.url),
-          type: v.type || undefined,
+          // Use the persisted source directly — no URL fallback. Empty (for
+          // pre-existing events) maps to the generic "External" style.
+          source: v.source,
           description: v.description,
           data: v.data || undefined,
           url: v.url || undefined,
