@@ -320,6 +320,8 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 			URL:         input.URL,
 			Data:        input.Data,
 			Details:     input.Details,
+			Source:      input.Source,
+			EventType:   input.Type,
 		},
 	}
 	notification := model.Notification{
@@ -422,6 +424,8 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 				URL:         input.URL,
 				Data:        input.Data,
 				Details:     input.Details,
+				Source:      input.Source,
+				EventType:   input.Type,
 			},
 		}
 		if err := r.Store.CreateEvent(ctx, tx, external); err != nil {

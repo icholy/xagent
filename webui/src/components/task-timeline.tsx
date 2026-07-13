@@ -137,7 +137,10 @@ function ExternalRow({ item }: { item: Extract<TimelineItem, { kind: 'external' 
       <div className="rounded-lg border border-amber-300/60 bg-amber-50/60 dark:bg-amber-950/20">
         <div className="flex items-center gap-2 px-4 py-2 text-xs">
           <span className="font-medium text-foreground">Event</span>
-          <span className="text-muted-foreground">· {src.label}</span>
+          <span className="text-muted-foreground">
+            · {src.label}
+            {item.type && ` · ${item.type}`}
+          </span>
           {item.wakes && <WakeBadge />}
           <span className="ml-auto text-muted-foreground">
             <RelativeTime date={item.at} />

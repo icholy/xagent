@@ -2568,7 +2568,15 @@ type ExternalPayload struct {
 	// interpret it: GitHub review comments populate path/line/side/diff_hunk; other
 	// sources may set their own keys or none. Distinct from the router's matchable
 	// Attrs, which are not persisted.
-	Details       map[string]string `protobuf:"bytes,4,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Details map[string]string `protobuf:"bytes,4,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// source is the coarse origin of the event (e.g. "github", "jira"), copied
+	// from the router's InputEvent.Source. Persisting it lets consumers pick an
+	// icon/label without regexing the URL.
+	Source string `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`
+	// type is the fine-grained event type (e.g. "issue_comment",
+	// "pull_request_review"), copied from the router's InputEvent.Type. It
+	// distinguishes comment vs review vs assigned, which the URL cannot.
+	Type          string `protobuf:"bytes,6,opt,name=type,proto3" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2629,6 +2637,20 @@ func (x *ExternalPayload) GetDetails() map[string]string {
 		return x.Details
 	}
 	return nil
+}
+
+func (x *ExternalPayload) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *ExternalPayload) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
 }
 
 // ReportPayload is the body of a report event — a from-agent message written by
@@ -6518,12 +6540,14 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\apayload\":\n" +
 	"\x12InstructionPayload\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\xd8\x01\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\x84\x02\n" +
 	"\x0fExternalPayload\x12 \n" +
 	"\vdescription\x18\x01 \x01(\tR\vdescription\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\tR\x04data\x12A\n" +
-	"\adetails\x18\x04 \x03(\v2'.xagent.v1.ExternalPayload.DetailsEntryR\adetails\x1a:\n" +
+	"\adetails\x18\x04 \x03(\v2'.xagent.v1.ExternalPayload.DetailsEntryR\adetails\x12\x16\n" +
+	"\x06source\x18\x05 \x01(\tR\x06source\x12\x12\n" +
+	"\x04type\x18\x06 \x01(\tR\x04type\x1a:\n" +
 	"\fDetailsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\")\n" +

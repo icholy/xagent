@@ -330,6 +330,14 @@ message ExternalPayload {
   // sources may set their own keys or none. Distinct from the router's matchable
   // Attrs, which are not persisted.
   map<string, string> details = 4;
+  // source is the coarse origin of the event (e.g. "github", "jira"), copied
+  // from the router's InputEvent.Source. Persisting it lets consumers pick an
+  // icon/label without regexing the URL.
+  string source = 5;
+  // type is the fine-grained event type (e.g. "issue_comment",
+  // "pull_request_review"), copied from the router's InputEvent.Type. It
+  // distinguishes comment vs review vs assigned, which the URL cannot.
+  string type = 6;
 }
 
 // ReportPayload is the body of a report event — a from-agent message written by
