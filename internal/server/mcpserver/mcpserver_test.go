@@ -213,6 +213,90 @@ func TestCreateTask_DefaultAutoArchive(t *testing.T) {
 	assert.Equal(t, got.AutoArchive.AsDuration(), -time.Second)
 }
 
+func TestGetTask_EventNative(t *testing.T) {
+	var eventFetches int
+	client := &xagentclient.ClientMock{
+		GetTaskFunc: func(ctx context.Context, req *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
+			assert.Equal(t, req.Id, int64(7))
+			return &xagentv1.GetTaskResponse{
+				Task: &xagentv1.Task{
+					Id:        7,
+					Name:      "test",
+					Workspace: "ws",
+					Runner:    "r1",
+					Status:    xagentv1.TaskStatus_RUNNING,
+					Url:       "https://xagent.example.com/ui/tasks/7?org=7",
+				},
+			}, nil
+		},
+		ListEventsByTaskFunc: func(ctx context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
+			eventFetches++
+			assert.Equal(t, req.TaskId, int64(7))
+			// The full stream, all arms, no type filter.
+			assert.Equal(t, len(req.Types), 0)
+			return &xagentv1.ListEventsByTaskResponse{
+				Events: []*xagentv1.Event{
+					{Id: 1, TaskId: 7, Payload: &xagentv1.Event_Instruction{
+						Instruction: &xagentv1.InstructionPayload{Text: "do it"},
+					}},
+					{Id: 2, TaskId: 7, Payload: &xagentv1.Event_Report{
+						Report: &xagentv1.ReportPayload{Content: "working"},
+					}},
+				},
+			}, nil
+		},
+		ListLinksFunc: func(ctx context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
+			assert.Equal(t, req.TaskId, int64(7))
+			return &xagentv1.ListLinksResponse{
+				Links: []*xagentv1.TaskLink{
+					{Id: 10, Relevance: "pr", Url: "https://example.com/pr/1", Subscribe: true},
+				},
+			}, nil
+		},
+	}
+	session := setupSession(t, client)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "get_task",
+		Arguments: map[string]any{"id": 7},
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, !result.IsError, "unexpected error result: %v", result.Content)
+
+	// The event stream is fetched exactly once — no separate brief fetch.
+	assert.Equal(t, eventFetches, 1)
+
+	var got map[string]any
+	mcptest.UnmarshalCallToolResult(t, result, &got)
+
+	// Header + links + raw event stream, no synthesized projections.
+	_, hasInstructions := got["instructions"]
+	assert.Assert(t, !hasInstructions, "instructions projection should be dropped")
+	_, hasLogs := got["logs"]
+	assert.Assert(t, !hasLogs, "logs projection should be dropped")
+
+	assert.Equal(t, got["id"], float64(7))
+	assert.Equal(t, got["name"], "test")
+	assert.Equal(t, got["workspace"], "ws")
+	assert.Equal(t, got["runner"], "r1")
+	assert.Equal(t, got["status"], "RUNNING")
+
+	links, ok := got["links"].([]any)
+	assert.Assert(t, ok, "links should be a list")
+	assert.Equal(t, len(links), 1)
+
+	// The raw all-arms stream, in stream order (instruction then report).
+	events, ok := got["events"].([]any)
+	assert.Assert(t, ok, "events should be a list")
+	assert.Equal(t, len(events), 2)
+	first := events[0].(map[string]any)
+	_, hasInstructionArm := first["instruction"]
+	assert.Assert(t, hasInstructionArm, "first event should carry the instruction arm")
+	second := events[1].(map[string]any)
+	_, hasReportArm := second["report"]
+	assert.Assert(t, hasReportArm, "second event should carry the report arm")
+}
+
 func TestListTasks_UsesTaskURLFromResponse(t *testing.T) {
 	client := &xagentclient.ClientMock{
 		ListTasksFunc: func(ctx context.Context, req *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
