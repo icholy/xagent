@@ -1,48 +1,20 @@
-Here is your task brief:
+# Task 1302 · first-run-brief L2
 
-{
-  "events": [
-    {
-      "id": "43",
-      "createdAt": "2023-11-14T22:15:00Z",
-      "instruction": {
-        "text": "Implement the first-run brief.",
-        "url": "https://github.com/icholy/xagent/issues/1398"
-      }
-    },
-    {
-      "id": "42",
-      "createdAt": "2023-11-14T22:13:20Z",
-      "external": {
-        "description": "PR review requested",
-        "url": "https://github.com/icholy/xagent/pull/1394"
-      }
-    }
-  ],
-  "id": 1302,
-  "instructions": [
-    {
-      "text": "Implement the first-run brief.",
-      "url": "https://github.com/icholy/xagent/issues/1398"
-    }
-  ],
-  "links": [
-    {
-      "id": "7",
-      "taskId": "1302",
-      "relevance": "the PR this task opened",
-      "url": "https://github.com/icholy/xagent/pull/1394",
-      "title": "feat(agent): first-run brief",
-      "subscribe": true,
-      "createdAt": "2023-11-14T22:14:10Z"
-    }
-  ],
-  "name": "first-run-brief L2",
-  "namespace": "team-core",
-  "status": "RUNNING",
-  "url": "https://xagent.choly.ca/ui/tasks/1302",
-  "workspace": "xagent"
-}
+- Workspace: xagent · Namespace: team-core
+- Task: https://xagent.choly.ca/ui/tasks/1302
+
+This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin.
+
+### Instruction — 2023-11-14 22:15 UTC
+Implement the first-run brief.
+Source: https://github.com/icholy/xagent/issues/1398
+
+### PR review requested — 2023-11-14 22:13 UTC
+Source: https://github.com/icholy/xagent/pull/1394
+
+### Link: feat(agent): first-run brief — 2023-11-14 22:14 UTC
+the PR this task opened
+https://github.com/icholy/xagent/pull/1394 · (subscribed)
 
 If the task does not have a name, use xagent:update_my_task to set one.
 
