@@ -60,8 +60,8 @@ func TestRunnerStart(t *testing.T) {
 
 	// Create mock client. The driver and the injected MCP server now connect to
 	// this server directly (over the host network), so it must answer the
-	// driver's started/stopped events and the agent's get_my_task
-	// (GetTaskDetails).
+	// driver's started/stopped events, its first-run brief (ListLinks), and the
+	// agent's get_my_task (GetTaskDetails).
 	mock := &xagentclient.ClientMock{
 		CreateTaskTokenFunc: func(_ context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "test-token"}, nil
@@ -81,6 +81,10 @@ func TestRunnerStart(t *testing.T) {
 		// page (more=false) makes the drain a single no-op call.
 		ListEventsByTaskFunc: func(_ context.Context, req *xagentv1.ListEventsByTaskRequest) (*xagentv1.ListEventsByTaskResponse, error) {
 			return &xagentv1.ListEventsByTaskResponse{}, nil
+		},
+		// The driver fetches the task's standing links for the first-run brief.
+		ListLinksFunc: func(_ context.Context, req *xagentv1.ListLinksRequest) (*xagentv1.ListLinksResponse, error) {
+			return &xagentv1.ListLinksResponse{}, nil
 		},
 	}
 
@@ -159,9 +163,11 @@ func TestRunnerStart(t *testing.T) {
 	err = docker.ContainerRemove(t.Context(), "xagent-1", container.RemoveOptions{})
 	assert.NilError(t, err)
 
-	// Verify GetTaskDetails was called twice: once by the driver's first-run
-	// brief fetch, and once by the dummy agent's get_my_task tool call.
-	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 2))
+	// Verify the driver fetched the first-run brief's links exactly once, and
+	// that GetTaskDetails was called once — by the dummy agent's get_my_task tool
+	// call, not the driver (the driver no longer fetches the aggregator).
+	assert.Assert(t, cmp.Len(mock.ListLinksCalls(), 1))
+	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 1))
 
 	// Verify the driver reported its own lifecycle: started, then stopped.
 	assert.DeepEqual(t, testx.ExtractField(mock.SubmittedRunnerEvents(), "Event"), []string{"started", "stopped"})
