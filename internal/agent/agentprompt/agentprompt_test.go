@@ -11,9 +11,10 @@ import (
 )
 
 // TestRenderGolden snapshots the whole rendered bootstrap prompt across its
-// branches: the first-run get_my_task bootstrap, a wake that injects the pending
-// events as a JSON array, the bare fallback when a wake has nothing pending, and
-// a wake with a workspace prompt appended.
+// branches: the first-run get_my_task bootstrap (nil TaskDetails fallback), the
+// first-run brief injected in place of that bootstrap, a wake that injects the
+// pending events as a JSON array, the bare fallback when a wake has nothing
+// pending, and a wake with a workspace prompt appended.
 // Regenerate the goldens with: go test ./internal/agent/agentprompt/ -run TestRenderGolden -update
 func TestRenderGolden(t *testing.T) {
 	t.Parallel()
@@ -36,6 +37,47 @@ func TestRenderGolden(t *testing.T) {
 			}},
 		},
 	}
+	// A field-complete brief: named task with url/namespace, an instruction event,
+	// an external event, and a link. Exercises every field RenderBrief carries.
+	brief := &xagentv1.GetTaskDetailsResponse{
+		Task: &xagentv1.Task{
+			Id:        1302,
+			Name:      "first-run-brief L2",
+			Status:    xagentv1.TaskStatus_RUNNING,
+			Workspace: "xagent",
+			Namespace: "team-core",
+			Url:       "https://xagent.choly.ca/ui/tasks/1302",
+		},
+		Events: []*xagentv1.Event{
+			{
+				Id:        43,
+				CreatedAt: timestamppb.New(time.Unix(1_700_000_100, 0).UTC()),
+				Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{
+					Text: "Implement the first-run brief.",
+					Url:  "https://github.com/icholy/xagent/issues/1398",
+				}},
+			},
+			{
+				Id:        42,
+				CreatedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+				Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+					Description: "PR review requested",
+					Url:         "https://github.com/icholy/xagent/pull/1394",
+				}},
+			},
+		},
+		Links: []*xagentv1.TaskLink{
+			{
+				Id:        7,
+				TaskId:    1302,
+				Relevance: "the PR this task opened",
+				Url:       "https://github.com/icholy/xagent/pull/1394",
+				Title:     "feat(agent): first-run brief",
+				Subscribe: true,
+				CreatedAt: timestamppb.New(time.Unix(1_700_000_050, 0).UTC()),
+			},
+		},
+	}
 	tests := []struct {
 		name   string
 		opts   Options
@@ -45,6 +87,11 @@ func TestRenderGolden(t *testing.T) {
 			name:   "first run bootstraps via get_my_task",
 			opts:   Options{},
 			golden: "prompt-first-run.golden",
+		},
+		{
+			name:   "first run renders the task brief",
+			opts:   Options{TaskDetails: brief},
+			golden: "prompt-first-run-brief.golden",
 		},
 		{
 			name:   "wake injects pending events",
