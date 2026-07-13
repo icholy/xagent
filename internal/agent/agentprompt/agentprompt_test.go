@@ -26,6 +26,8 @@ func TestRenderGolden(t *testing.T) {
 			Id:        42,
 			CreatedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
 			Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+				Source:      "github",
+				Type:        "review_requested",
 				Description: "PR review requested",
 				Url:         "https://github.com/icholy/xagent/pull/1394",
 			}},
@@ -74,6 +76,8 @@ func TestRenderGolden(t *testing.T) {
 				Id:        42,
 				CreatedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
 				Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+					Source:      "github",
+					Type:        "review_requested",
 					Description: "PR review requested",
 					Url:         "https://github.com/icholy/xagent/pull/1394",
 				}},

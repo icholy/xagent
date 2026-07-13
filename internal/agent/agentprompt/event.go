@@ -2,6 +2,7 @@ package agentprompt
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/icholy/xagent/internal/model"
@@ -31,9 +32,7 @@ func renderEvent(event *xagentv1.Event) string {
 	case *xagentv1.Event_External:
 		p := arm.External
 		b.WriteString("### External Event — " + ts)
-		if label := externalType(p.GetSource(), p.GetType()); label != "" {
-			b.WriteString("\nType: " + label)
-		}
+		b.WriteString(fmt.Sprintf("\nType: %s - %s", p.GetSource(), p.GetType()))
 		if p.GetDescription() != "" {
 			b.WriteString("\nDescription: " + p.GetDescription())
 		}
@@ -84,21 +83,6 @@ func linkBlock(title, ts, relevance, url string, subscribe bool) string {
 // the Unix epoch).
 func formatEventTime(ts *timestamppb.Timestamp) string {
 	return ts.AsTime().UTC().Format("2006-01-02 15:04") + " UTC"
-}
-
-// externalType builds the "{source} - {type}" value for an external event's
-// Type: line. The source and type are used verbatim — no display-casing or
-// humanization; either field is omitted when empty, so a pre-#1410 event with
-// both empty yields "" and the caller drops the Type: line entirely.
-func externalType(source, eventType string) string {
-	var parts []string
-	if source != "" {
-		parts = append(parts, source)
-	}
-	if eventType != "" {
-		parts = append(parts, eventType)
-	}
-	return strings.Join(parts, " - ")
 }
 
 // renderDetails marshals an external event's opaque details map as one
