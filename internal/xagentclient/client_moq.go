@@ -79,9 +79,6 @@ var _ Client = &ClientMock{}
 //			GetTaskFunc: func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 //				panic("mock out the GetTask method")
 //			},
-//			GetTaskDetailsFunc: func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-//				panic("mock out the GetTaskDetails method")
-//			},
 //			LinkGitHubInstallationFunc: func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error) {
 //				panic("mock out the LinkGitHubInstallation method")
 //			},
@@ -217,9 +214,6 @@ type ClientMock struct {
 
 	// GetTaskFunc mocks the GetTask method.
 	GetTaskFunc func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error)
-
-	// GetTaskDetailsFunc mocks the GetTaskDetails method.
-	GetTaskDetailsFunc func(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error)
 
 	// LinkGitHubInstallationFunc mocks the LinkGitHubInstallation method.
 	LinkGitHubInstallationFunc func(contextMoqParam context.Context, linkGitHubInstallationRequest *xagentv1.LinkGitHubInstallationRequest) (*xagentv1.LinkGitHubInstallationResponse, error)
@@ -432,13 +426,6 @@ type ClientMock struct {
 			// GetTaskRequest is the getTaskRequest argument value.
 			GetTaskRequest *xagentv1.GetTaskRequest
 		}
-		// GetTaskDetails holds details about calls to the GetTaskDetails method.
-		GetTaskDetails []struct {
-			// ContextMoqParam is the contextMoqParam argument value.
-			ContextMoqParam context.Context
-			// GetTaskDetailsRequest is the getTaskDetailsRequest argument value.
-			GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
-		}
 		// LinkGitHubInstallation holds details about calls to the LinkGitHubInstallation method.
 		LinkGitHubInstallation []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -621,7 +608,6 @@ type ClientMock struct {
 	lockGetProfile                     sync.RWMutex
 	lockGetRoutingRules                sync.RWMutex
 	lockGetTask                        sync.RWMutex
-	lockGetTaskDetails                 sync.RWMutex
 	lockLinkGitHubInstallation         sync.RWMutex
 	lockListEventsByTask               sync.RWMutex
 	lockListExternalEvents             sync.RWMutex
@@ -1364,42 +1350,6 @@ func (mock *ClientMock) GetTaskCalls() []struct {
 	mock.lockGetTask.RLock()
 	calls = mock.calls.GetTask
 	mock.lockGetTask.RUnlock()
-	return calls
-}
-
-// GetTaskDetails calls GetTaskDetailsFunc.
-func (mock *ClientMock) GetTaskDetails(contextMoqParam context.Context, getTaskDetailsRequest *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-	if mock.GetTaskDetailsFunc == nil {
-		panic("ClientMock.GetTaskDetailsFunc: method is nil but Client.GetTaskDetails was just called")
-	}
-	callInfo := struct {
-		ContextMoqParam       context.Context
-		GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
-	}{
-		ContextMoqParam:       contextMoqParam,
-		GetTaskDetailsRequest: getTaskDetailsRequest,
-	}
-	mock.lockGetTaskDetails.Lock()
-	mock.calls.GetTaskDetails = append(mock.calls.GetTaskDetails, callInfo)
-	mock.lockGetTaskDetails.Unlock()
-	return mock.GetTaskDetailsFunc(contextMoqParam, getTaskDetailsRequest)
-}
-
-// GetTaskDetailsCalls gets all the calls that were made to GetTaskDetails.
-// Check the length with:
-//
-//	len(mockedClient.GetTaskDetailsCalls())
-func (mock *ClientMock) GetTaskDetailsCalls() []struct {
-	ContextMoqParam       context.Context
-	GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
-} {
-	var calls []struct {
-		ContextMoqParam       context.Context
-		GetTaskDetailsRequest *xagentv1.GetTaskDetailsRequest
-	}
-	mock.lockGetTaskDetails.RLock()
-	calls = mock.calls.GetTaskDetails
-	mock.lockGetTaskDetails.RUnlock()
 	return calls
 }
 

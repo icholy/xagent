@@ -53,46 +53,36 @@ func TestRenderGolden(t *testing.T) {
 	}
 	// A field-complete brief: named task with url/namespace, an instruction event,
 	// an external event, and a link. Exercises every field the first-run brief
-	// renders (Task, Events, Links).
-	brief := &xagentv1.GetTaskDetailsResponse{
-		Task: &xagentv1.Task{
-			Id:        1302,
-			Name:      "first-run-brief L2",
-			Status:    xagentv1.TaskStatus_RUNNING,
-			Workspace: "xagent",
-			Namespace: "team-core",
-			Url:       "https://xagent.choly.ca/ui/tasks/1302",
+	// renders (Task, Events, Links). The task reuses `task` above.
+	briefEvents := []*xagentv1.Event{
+		{
+			Id:        43,
+			CreatedAt: timestamppb.New(time.Unix(1_700_000_100, 0).UTC()),
+			Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{
+				Text: "Implement the first-run brief.",
+				Url:  "https://github.com/icholy/xagent/issues/1398",
+			}},
 		},
-		Events: []*xagentv1.Event{
-			{
-				Id:        43,
-				CreatedAt: timestamppb.New(time.Unix(1_700_000_100, 0).UTC()),
-				Payload: &xagentv1.Event_Instruction{Instruction: &xagentv1.InstructionPayload{
-					Text: "Implement the first-run brief.",
-					Url:  "https://github.com/icholy/xagent/issues/1398",
-				}},
-			},
-			{
-				Id:        42,
-				CreatedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
-				Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
-					Source:      "github",
-					Type:        "review_requested",
-					Description: "PR review requested",
-					Url:         "https://github.com/icholy/xagent/pull/1394",
-				}},
-			},
+		{
+			Id:        42,
+			CreatedAt: timestamppb.New(time.Unix(1_700_000_000, 0).UTC()),
+			Payload: &xagentv1.Event_External{External: &xagentv1.ExternalPayload{
+				Source:      "github",
+				Type:        "review_requested",
+				Description: "PR review requested",
+				Url:         "https://github.com/icholy/xagent/pull/1394",
+			}},
 		},
-		Links: []*xagentv1.TaskLink{
-			{
-				Id:        7,
-				TaskId:    1302,
-				Relevance: "the PR this task opened",
-				Url:       "https://github.com/icholy/xagent/pull/1394",
-				Title:     "feat(agent): first-run brief",
-				Subscribe: true,
-				CreatedAt: timestamppb.New(time.Unix(1_700_000_050, 0).UTC()),
-			},
+	}
+	briefLinks := []*xagentv1.TaskLink{
+		{
+			Id:        7,
+			TaskId:    1302,
+			Relevance: "the PR this task opened",
+			Url:       "https://github.com/icholy/xagent/pull/1394",
+			Title:     "feat(agent): first-run brief",
+			Subscribe: true,
+			CreatedAt: timestamppb.New(time.Unix(1_700_000_050, 0).UTC()),
 		},
 	}
 	tests := []struct {
@@ -109,7 +99,7 @@ func TestRenderGolden(t *testing.T) {
 		},
 		{
 			name:   "first run renders the task brief",
-			opts:   Options{Task: brief.Task, Events: brief.Events, Links: brief.Links},
+			opts:   Options{Task: task, Events: briefEvents, Links: briefLinks},
 			golden: "prompt-first-run-brief.golden",
 		},
 		{

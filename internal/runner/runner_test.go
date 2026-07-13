@@ -161,11 +161,8 @@ func TestRunnerStart(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Verify ListLinks was called twice — once by the driver's first-run brief
-	// and once by the dummy agent's get_my_task tool call — and that
-	// GetTaskDetails was never called: neither the driver nor get_my_task fetches
-	// the aggregator any more.
+	// and once by the dummy agent's get_my_task tool call.
 	assert.Assert(t, cmp.Len(mock.ListLinksCalls(), 2))
-	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 0))
 
 	// Verify the driver reported its own lifecycle: started, then stopped.
 	assert.DeepEqual(t, testx.ExtractField(mock.SubmittedRunnerEvents(), "Event"), []string{"started", "stopped"})
