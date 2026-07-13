@@ -48,9 +48,6 @@ const (
 	XAgentServiceCreateTaskProcedure = "/xagent.v1.XAgentService/CreateTask"
 	// XAgentServiceGetTaskProcedure is the fully-qualified name of the XAgentService's GetTask RPC.
 	XAgentServiceGetTaskProcedure = "/xagent.v1.XAgentService/GetTask"
-	// XAgentServiceGetTaskDetailsProcedure is the fully-qualified name of the XAgentService's
-	// GetTaskDetails RPC.
-	XAgentServiceGetTaskDetailsProcedure = "/xagent.v1.XAgentService/GetTaskDetails"
 	// XAgentServiceUpdateTaskProcedure is the fully-qualified name of the XAgentService's UpdateTask
 	// RPC.
 	XAgentServiceUpdateTaskProcedure = "/xagent.v1.XAgentService/UpdateTask"
@@ -162,7 +159,6 @@ type XAgentServiceClient interface {
 	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
-	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
 	UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error)
 	ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error)
 	UnarchiveTask(context.Context, *v1.UnarchiveTaskRequest) (*v1.UnarchiveTaskResponse, error)
@@ -247,12 +243,6 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+XAgentServiceGetTaskProcedure,
 			connect.WithSchema(xAgentServiceMethods.ByName("GetTask")),
-			connect.WithClientOptions(opts...),
-		),
-		getTaskDetails: connect.NewClient[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse](
-			httpClient,
-			baseURL+XAgentServiceGetTaskDetailsProcedure,
-			connect.WithSchema(xAgentServiceMethods.ByName("GetTaskDetails")),
 			connect.WithClientOptions(opts...),
 		),
 		updateTask: connect.NewClient[v1.UpdateTaskRequest, v1.UpdateTaskResponse](
@@ -488,7 +478,6 @@ type xAgentServiceClient struct {
 	listRunnerTasks                *connect.Client[v1.ListRunnerTasksRequest, v1.ListRunnerTasksResponse]
 	createTask                     *connect.Client[v1.CreateTaskRequest, v1.CreateTaskResponse]
 	getTask                        *connect.Client[v1.GetTaskRequest, v1.GetTaskResponse]
-	getTaskDetails                 *connect.Client[v1.GetTaskDetailsRequest, v1.GetTaskDetailsResponse]
 	updateTask                     *connect.Client[v1.UpdateTaskRequest, v1.UpdateTaskResponse]
 	archiveTask                    *connect.Client[v1.ArchiveTaskRequest, v1.ArchiveTaskResponse]
 	unarchiveTask                  *connect.Client[v1.UnarchiveTaskRequest, v1.UnarchiveTaskResponse]
@@ -576,15 +565,6 @@ func (c *xAgentServiceClient) CreateTask(ctx context.Context, req *v1.CreateTask
 // GetTask calls xagent.v1.XAgentService.GetTask.
 func (c *xAgentServiceClient) GetTask(ctx context.Context, req *v1.GetTaskRequest) (*v1.GetTaskResponse, error) {
 	response, err := c.getTask.CallUnary(ctx, connect.NewRequest(req))
-	if response != nil {
-		return response.Msg, err
-	}
-	return nil, err
-}
-
-// GetTaskDetails calls xagent.v1.XAgentService.GetTaskDetails.
-func (c *xAgentServiceClient) GetTaskDetails(ctx context.Context, req *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error) {
-	response, err := c.getTaskDetails.CallUnary(ctx, connect.NewRequest(req))
 	if response != nil {
 		return response.Msg, err
 	}
@@ -932,7 +912,6 @@ type XAgentServiceHandler interface {
 	ListRunnerTasks(context.Context, *v1.ListRunnerTasksRequest) (*v1.ListRunnerTasksResponse, error)
 	CreateTask(context.Context, *v1.CreateTaskRequest) (*v1.CreateTaskResponse, error)
 	GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error)
-	GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error)
 	UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error)
 	ArchiveTask(context.Context, *v1.ArchiveTaskRequest) (*v1.ArchiveTaskResponse, error)
 	UnarchiveTask(context.Context, *v1.UnarchiveTaskRequest) (*v1.UnarchiveTaskResponse, error)
@@ -1013,12 +992,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		XAgentServiceGetTaskProcedure,
 		svc.GetTask,
 		connect.WithSchema(xAgentServiceMethods.ByName("GetTask")),
-		connect.WithHandlerOptions(opts...),
-	)
-	xAgentServiceGetTaskDetailsHandler := connect.NewUnaryHandlerSimple(
-		XAgentServiceGetTaskDetailsProcedure,
-		svc.GetTaskDetails,
-		connect.WithSchema(xAgentServiceMethods.ByName("GetTaskDetails")),
 		connect.WithHandlerOptions(opts...),
 	)
 	xAgentServiceUpdateTaskHandler := connect.NewUnaryHandlerSimple(
@@ -1257,8 +1230,6 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceCreateTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceGetTaskProcedure:
 			xAgentServiceGetTaskHandler.ServeHTTP(w, r)
-		case XAgentServiceGetTaskDetailsProcedure:
-			xAgentServiceGetTaskDetailsHandler.ServeHTTP(w, r)
 		case XAgentServiceUpdateTaskProcedure:
 			xAgentServiceUpdateTaskHandler.ServeHTTP(w, r)
 		case XAgentServiceArchiveTaskProcedure:
@@ -1364,10 +1335,6 @@ func (UnimplementedXAgentServiceHandler) CreateTask(context.Context, *v1.CreateT
 
 func (UnimplementedXAgentServiceHandler) GetTask(context.Context, *v1.GetTaskRequest) (*v1.GetTaskResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetTask is not implemented"))
-}
-
-func (UnimplementedXAgentServiceHandler) GetTaskDetails(context.Context, *v1.GetTaskDetailsRequest) (*v1.GetTaskDetailsResponse, error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetTaskDetails is not implemented"))
 }
 
 func (UnimplementedXAgentServiceHandler) UpdateTask(context.Context, *v1.UpdateTaskRequest) (*v1.UpdateTaskResponse, error) {

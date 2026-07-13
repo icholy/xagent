@@ -14,7 +14,6 @@ service XAgentService {
   rpc ListRunnerTasks(ListRunnerTasksRequest) returns (ListRunnerTasksResponse);
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
-  rpc GetTaskDetails(GetTaskDetailsRequest) returns (GetTaskDetailsResponse);
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
   rpc ArchiveTask(ArchiveTaskRequest) returns (ArchiveTaskResponse);
   rpc UnarchiveTask(UnarchiveTaskRequest) returns (UnarchiveTaskResponse);
@@ -187,17 +186,6 @@ message GetTaskRequest {
 
 message GetTaskResponse {
   Task task = 1;
-}
-
-message GetTaskDetailsRequest {
-  int64 id = 1;
-}
-
-message GetTaskDetailsResponse {
-  Task task = 1;
-  reserved 2;  // Previously: children (child tasks removed)
-  repeated Event events = 3;
-  repeated TaskLink links = 4;
 }
 
 message UpdateTaskRequest {

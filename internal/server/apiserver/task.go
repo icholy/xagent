@@ -185,34 +185,6 @@ func (s *Server) GetTask(ctx context.Context, req *xagentv1.GetTaskRequest) (*xa
 	}, nil
 }
 
-func (s *Server) GetTaskDetails(ctx context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.AllowOp(authscope.OpTaskRead) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
-	}
-	task, err := s.store.GetTask(ctx, nil, req.Id, caller.OrgID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("task %d not found", req.Id))
-		}
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !caller.Scopes.Allow(authscope.OpTaskRead, task.ScopeAttr()...) {
-		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot read task"))
-	}
-	// The brief: the task's to-agent events (instruction + external) in stream
-	// order. Instructions are read from the stream, not a denormalized column.
-	events, _ := s.store.ListEventsByTask(ctx, nil, req.Id, caller.OrgID,
-		[]string{model.EventTypeInstruction, model.EventTypeExternal})
-	links, _ := s.store.ListLinksByTask(ctx, nil, req.Id, caller.OrgID)
-	resp := &xagentv1.GetTaskDetailsResponse{
-		Task:   task.Proto(s.baseURL),
-		Events: model.ProtoMap(events),
-		Links:  model.ProtoMap(links),
-	}
-	return resp, nil
-}
-
 func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 	caller := apiauth.MustCaller(ctx)
 	// Coarse, fail-fast capability gate before entering the transaction (AllowOp

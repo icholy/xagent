@@ -216,8 +216,8 @@ export class XAgentExecutor {
 	// taskDetails composes the {task, events, links, logs} bundle from the
 	// primitive RPCs (getTask + listEventsByTask + listLinks) plus the projected
 	// activity logs. It preserves the {task, events, links, logs} output shape
-	// saved workflows key off, replacing the GetTaskDetails aggregator this node
-	// no longer calls.
+	// saved workflows key off, replacing the former server-side task-details
+	// aggregator this node no longer calls.
 	private async taskDetails(taskId: bigint): Promise<IDataObject> {
 		const { task } = await this.client.getTask({ id: taskId });
 		const { events } = await this.client.listEventsByTask({ taskId });

@@ -94,19 +94,6 @@ func TestTaskScope_GetTask_OwnAllowed_OtherDenied(t *testing.T) {
 	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
 }
 
-func TestTaskScope_GetTaskDetails_OwnAllowed_OtherDenied(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	_, org, taskA, taskB := newOrgWithTasks(t, srv)
-
-	own := scopedCtx(t, org, taskScopes(taskA.Id))
-
-	_, err := srv.GetTaskDetails(own, &xagentv1.GetTaskDetailsRequest{Id: taskA.Id})
-	assert.NilError(t, err)
-	_, err = srv.GetTaskDetails(own, &xagentv1.GetTaskDetailsRequest{Id: taskB.Id})
-	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
-}
-
 func TestTaskScope_UpdateTask_OwnAllowed_OtherDenied(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
@@ -183,10 +170,6 @@ func taskInstanceHandlers() []struct {
 	}{
 		{"GetTask", func(ctx context.Context, srv *Server, id int64) error {
 			_, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: id})
-			return err
-		}},
-		{"GetTaskDetails", func(ctx context.Context, srv *Server, id int64) error {
-			_, err := srv.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: id})
 			return err
 		}},
 		{"UpdateTask", func(ctx context.Context, srv *Server, id int64) error {

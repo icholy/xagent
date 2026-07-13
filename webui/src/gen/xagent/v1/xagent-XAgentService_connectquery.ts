@@ -35,11 +35,6 @@ export const createTask = XAgentService.method.createTask;
 export const getTask = XAgentService.method.getTask;
 
 /**
- * @generated from rpc xagent.v1.XAgentService.GetTaskDetails
- */
-export const getTaskDetails = XAgentService.method.getTaskDetails;
-
-/**
  * @generated from rpc xagent.v1.XAgentService.UpdateTask
  */
 export const updateTask = XAgentService.method.updateTask;

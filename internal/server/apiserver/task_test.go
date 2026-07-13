@@ -62,9 +62,9 @@ func TestGetTask(t *testing.T) {
 	assert.DeepEqual(t, getResp.Task, expected, protocmp.Transform())
 
 	// The initial instructions are seeded into the stream as instruction events.
-	detailsResp, err := srv.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: createResp.Task.Id})
+	eventsResp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: createResp.Task.Id})
 	assert.NilError(t, err)
-	assert.DeepEqual(t, instructionPayloads(detailsResp.Events), []*xagentv1.InstructionPayload{
+	assert.DeepEqual(t, instructionPayloads(eventsResp.Events), []*xagentv1.InstructionPayload{
 		{Text: "Do something important", Url: "https://example.com/issue/1"},
 		{Text: "Do something else", Url: "https://example.com/issue/2"},
 	}, protocmp.Transform())
@@ -100,30 +100,6 @@ func TestGetTask_Permissions(t *testing.T) {
 	// Act
 	_, errA := srv.GetTask(ctxA, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	_, errB := srv.GetTask(ctxB, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
-
-	// Assert
-	assert.NilError(t, errA)
-	assert.ErrorContains(t, errB, "not found")
-}
-
-func TestGetTaskDetails_Permissions(t *testing.T) {
-	t.Parallel()
-	// Arrange
-	srv := New(Options{Store: teststore.New(t)})
-	orgA := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxA := createCtx(t, orgA)
-	orgB := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctxB := createCtx(t, orgB)
-	createResp, err := srv.CreateTask(ctxA, &xagentv1.CreateTaskRequest{
-		Name:      "User A's Task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Act
-	_, errA := srv.GetTaskDetails(ctxA, &xagentv1.GetTaskDetailsRequest{Id: createResp.Task.Id})
-	_, errB := srv.GetTaskDetails(ctxB, &xagentv1.GetTaskDetailsRequest{Id: createResp.Task.Id})
 
 	// Assert
 	assert.NilError(t, errA)
@@ -168,9 +144,9 @@ func TestCreateTask(t *testing.T) {
 	assert.DeepEqual(t, resp.Task, expected, protocmp.Transform())
 
 	// The initial instruction is seeded into the stream as an instruction event.
-	detailsResp, err := srv.GetTaskDetails(ctx, &xagentv1.GetTaskDetailsRequest{Id: resp.Task.Id})
+	eventsResp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: resp.Task.Id})
 	assert.NilError(t, err)
-	assert.DeepEqual(t, instructionPayloads(detailsResp.Events), []*xagentv1.InstructionPayload{
+	assert.DeepEqual(t, instructionPayloads(eventsResp.Events), []*xagentv1.InstructionPayload{
 		{Text: "Do something", Url: "https://example.com/issue/1"},
 	}, protocmp.Transform())
 }
