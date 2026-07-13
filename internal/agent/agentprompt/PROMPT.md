@@ -12,8 +12,6 @@ The task was updated. Continue.
 {{- end -}}
 {{- else -}}
 {{- if .TaskDetails -}}
-Here is your task brief:
-
 {{ RenderBrief .TaskDetails }}
 
 If the task does not have a name, use xagent:update_my_task to set one.

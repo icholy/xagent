@@ -6,6 +6,7 @@ package agentprompt
 import (
 	_ "embed"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -46,67 +47,69 @@ func RenderEvent(event *xagentv1.Event) (string, error) {
 	return string(out), nil
 }
 
+// firstRunFraming frames the injected brief: it tells the model this is the
+// first run and its full context follows inline, so it need not call
+// get_my_task to begin.
+const firstRunFraming = "This is your first run on this task. Its full context is below — you already have everything you need and do not need to call get_my_task to begin."
+
 // RenderBrief renders a task's full brief for injection into the first-run
-// prompt. It deliberately DUPLICATES the field set agentmcp.taskDetailsToMap
-// exposes (id, name, status, workspace, namespace, url, instructions, links,
-// events) rather than sharing it: agentprompt depends only on the proto package
-// to avoid an import cycle (see the package doc), and the two renderings are
-// meant to diverge — this one is free to grow a more readable form for a model
-// reading it cold, while get_my_task is free to be reshaped for its own callers.
+// prompt. It reads the event-native GetTaskDetailsResponse directly — the thin
+// task header, the raw event stream, and the links — and renders a header, the
+// first-run framing sentence, the events as a flat renderEvent list, and the
+// links. It no longer emits the flattened taskDetailsToMap JSON blob or the
+// duplicated instructions projection; the instruction appears once, as an
+// instruction event through renderEvent.
 //
-// Nested messages (instructions, links, events) are rendered through
-// renderMessage so their whitespace is deterministic, and instructions are
-// projected out of the instruction events via GetInstruction(). It is nil-safe:
-// a nil resp (or nil task) renders zero values.
-func RenderBrief(resp *xagentv1.GetTaskDetailsResponse) (string, error) {
-	var instructions []json.RawMessage
+// It is nil-safe: a nil resp (or nil task) renders zero values through the
+// proto getters. Events with no set arm and empty link/event slices contribute
+// nothing.
+func RenderBrief(resp *xagentv1.GetTaskDetailsResponse) string {
+	blocks := []string{
+		renderHeader(resp.GetTask()),
+		firstRunFraming,
+	}
 	for _, event := range resp.GetEvents() {
-		inst := event.GetInstruction()
-		if inst == nil {
-			continue
+		if block := renderEvent(event); block != "" {
+			blocks = append(blocks, block)
 		}
-		data, err := renderMessage(inst)
-		if err != nil {
-			return "", err
-		}
-		instructions = append(instructions, data)
 	}
+	if links := renderLinks(resp.GetLinks()); links != "" {
+		blocks = append(blocks, links)
+	}
+	return strings.Join(blocks, "\n\n")
+}
 
-	links := make([]json.RawMessage, len(resp.GetLinks()))
-	for i, link := range resp.GetLinks() {
-		data, err := renderMessage(link)
-		if err != nil {
-			return "", err
-		}
-		links[i] = data
-	}
+// renderHeader renders the task header block: the `# Task {id} · {name}` title
+// plus the workspace/namespace and task url lines. It deliberately omits status
+// — a task reading this prompt is by definition running, so status is noise (see
+// proposals/draft/hybrid-prompt-rendering.md). The returned block has no
+// trailing newline; callers join blocks with blank lines. Nil-safe via the
+// proto getters.
+func renderHeader(task *xagentv1.Task) string {
+	var b strings.Builder
+	b.WriteString("# Task " + strconv.FormatInt(task.GetId(), 10) + " · " + task.GetName() + "\n\n")
+	b.WriteString("- Workspace: " + task.GetWorkspace() + " · Namespace: " + task.GetNamespace() + "\n")
+	b.WriteString("- Task: " + task.GetUrl())
+	return b.String()
+}
 
-	events := make([]json.RawMessage, len(resp.GetEvents()))
-	for i, event := range resp.GetEvents() {
-		data, err := renderMessage(event)
-		if err != nil {
-			return "", err
+// renderLinks renders the task's links, one block per link joined by blank
+// lines, in the same shape as the renderEvent link arm (`### Link: {title} —
+// {time}` / relevance / url · (subscribed)). It returns "" for an empty slice
+// so the caller can drop the section entirely.
+func renderLinks(links []*xagentv1.TaskLink) string {
+	blocks := make([]string, 0, len(links))
+	for _, link := range links {
+		var b strings.Builder
+		b.WriteString("### Link: " + link.GetTitle() + " — " + formatEventTime(link.GetCreatedAt()) + "\n")
+		b.WriteString(link.GetRelevance() + "\n")
+		b.WriteString(link.GetUrl())
+		if link.GetSubscribe() {
+			b.WriteString(" · (subscribed)")
 		}
-		events[i] = data
+		blocks = append(blocks, b.String())
 	}
-
-	task := resp.GetTask()
-	brief := map[string]any{
-		"id":           task.GetId(),
-		"name":         task.GetName(),
-		"status":       task.GetStatus().String(),
-		"workspace":    task.GetWorkspace(),
-		"namespace":    task.GetNamespace(),
-		"url":          task.GetUrl(),
-		"instructions": instructions,
-		"links":        links,
-		"events":       events,
-	}
-	out, err := json.MarshalIndent(brief, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
+	return strings.Join(blocks, "\n\n")
 }
 
 //go:embed PROMPT.md
