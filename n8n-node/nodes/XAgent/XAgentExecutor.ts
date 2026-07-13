@@ -9,11 +9,14 @@ import { createConnectTransport } from '@connectrpc/connect-web';
 import { toJson, type DescMessage, type MessageShape } from '@bufbuild/protobuf';
 import {
 	XAgentService,
-	GetTaskDetailsResponseSchema,
+	TaskSchema,
+	EventSchema,
+	TaskLinkSchema,
 	CancelTaskResponseSchema,
 	ArchiveTaskResponseSchema,
 	LifecycleKind,
 	TaskStatus,
+	type Event,
 	type LifecyclePayload,
 } from '../../gen/xagent/v1/xagent_pb';
 
@@ -198,10 +201,9 @@ export class XAgentExecutor {
 	// activityLogs projects the report and lifecycle arms of a task's event
 	// stream into flat {type, content} rows (the logs table is gone). The stream
 	// is returned newest-first, so reverse it to render chronologically.
-	private async activityLogs(taskId: bigint): Promise<IDataObject[]> {
-		const resp = await this.client.listEventsByTask({ taskId });
+	private activityLogs(events: Event[]): IDataObject[] {
 		const rows: IDataObject[] = [];
-		for (const e of [...resp.events].reverse()) {
+		for (const e of [...events].reverse()) {
 			if (e.payload.case === 'report') {
 				rows.push({ type: 'report', content: e.payload.value.content });
 			} else if (e.payload.case === 'lifecycle') {
@@ -209,6 +211,23 @@ export class XAgentExecutor {
 			}
 		}
 		return rows;
+	}
+
+	// taskDetails composes the {task, events, links, logs} bundle from the
+	// primitive RPCs (getTask + listEventsByTask + listLinks) plus the projected
+	// activity logs. It preserves the {task, events, links, logs} output shape
+	// saved workflows key off, replacing the GetTaskDetails aggregator this node
+	// no longer calls.
+	private async taskDetails(taskId: bigint): Promise<IDataObject> {
+		const { task } = await this.client.getTask({ id: taskId });
+		const { events } = await this.client.listEventsByTask({ taskId });
+		const { links } = await this.client.listLinks({ taskId });
+		return {
+			task: this.toJson(TaskSchema, task!),
+			events: events.map((e) => this.toJson(EventSchema, e)),
+			links: links.map((l) => this.toJson(TaskLinkSchema, l)),
+			logs: this.activityLogs(events),
+		};
 	}
 
 	private async create(i: number): Promise<INodeExecutionData> {
@@ -225,13 +244,8 @@ export class XAgentExecutor {
 
 		await this.wait(taskId, i);
 
-		const details = await this.client.getTaskDetails({ id: taskId });
-		const logs = await this.activityLogs(taskId);
 		return {
-			json: {
-				...this.toJson(GetTaskDetailsResponseSchema, details),
-				logs,
-			},
+			json: await this.taskDetails(taskId),
 			pairedItem: { item: i },
 		};
 	}
@@ -271,13 +285,8 @@ export class XAgentExecutor {
 
 	private async getDetails(i: number): Promise<INodeExecutionData> {
 		const taskId = this.getBigIntParameter('taskId', i);
-		const details = await this.client.getTaskDetails({ id: taskId });
-		const logs = await this.activityLogs(taskId);
 		return {
-			json: {
-				...this.toJson(GetTaskDetailsResponseSchema, details),
-				logs,
-			},
+			json: await this.taskDetails(taskId),
 			pairedItem: { item: i },
 		};
 	}
@@ -293,13 +302,8 @@ export class XAgentExecutor {
 
 		await this.wait(taskId, i);
 
-		const details = await this.client.getTaskDetails({ id: taskId });
-		const logs = await this.activityLogs(taskId);
 		return {
-			json: {
-				...this.toJson(GetTaskDetailsResponseSchema, details),
-				logs,
-			},
+			json: await this.taskDetails(taskId),
 			pairedItem: { item: i },
 		};
 	}
