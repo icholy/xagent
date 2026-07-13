@@ -19,45 +19,47 @@ import (
 // join blocks with blank lines. An event with no set arm renders empty.
 func renderEvent(event *xagentv1.Event) string {
 	ts := formatEventTime(event.GetCreatedAt())
-	var lines []string
+	var b strings.Builder
 	switch arm := event.GetPayload().(type) {
 	case *xagentv1.Event_Instruction:
 		p := arm.Instruction
-		lines = append(lines, "### Instruction — "+ts, p.GetText())
+		b.WriteString("### Instruction — " + ts + "\n")
+		b.WriteString(p.GetText())
 		if p.GetUrl() != "" {
-			lines = append(lines, "Source: "+p.GetUrl())
+			b.WriteString("\nSource: " + p.GetUrl())
 		}
 	case *xagentv1.Event_External:
 		p := arm.External
-		lines = append(lines, "### "+p.GetDescription()+" — "+ts)
+		b.WriteString("### " + p.GetDescription() + " — " + ts)
 		if label := externalLabel(p.GetSource(), p.GetType()); label != "" {
-			lines = append(lines, label)
+			b.WriteString("\n" + label)
 		}
 		if p.GetUrl() != "" {
-			lines = append(lines, "Source: "+p.GetUrl())
+			b.WriteString("\nSource: " + p.GetUrl())
 		}
 		if p.GetData() != "" {
-			lines = append(lines, "", p.GetData())
+			b.WriteString("\n\n" + p.GetData())
 		}
 		if len(p.GetDetails()) > 0 {
-			lines = append(lines, "", "```json", renderDetails(p.GetDetails()), "```")
+			b.WriteString("\n\n```json\n" + renderDetails(p.GetDetails()) + "\n```")
 		}
 	case *xagentv1.Event_Lifecycle:
-		lines = append(lines, "### "+lifecycleSummary(event)+" — "+ts)
+		b.WriteString("### " + lifecycleSummary(event) + " — " + ts)
 	case *xagentv1.Event_Link:
 		p := arm.Link
-		lines = append(lines, "### Link: "+p.GetTitle()+" — "+ts, p.GetRelevance())
-		footer := p.GetUrl()
+		b.WriteString("### Link: " + p.GetTitle() + " — " + ts + "\n")
+		b.WriteString(p.GetRelevance() + "\n")
+		b.WriteString(p.GetUrl())
 		if p.GetSubscribe() {
-			footer += " · (subscribed)"
+			b.WriteString(" · (subscribed)")
 		}
-		lines = append(lines, footer)
 	case *xagentv1.Event_Report:
-		lines = append(lines, "### Report — "+ts, arm.Report.GetContent())
+		b.WriteString("### Report — " + ts + "\n")
+		b.WriteString(arm.Report.GetContent())
 	default:
 		return ""
 	}
-	return strings.Join(lines, "\n")
+	return b.String()
 }
 
 // formatEventTime renders an event timestamp as a deterministic, human-readable
