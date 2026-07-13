@@ -8,6 +8,7 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
+	_ = x[TaskStatusUnspecified-0]
 	_ = x[TaskStatusPending-1]
 	_ = x[TaskStatusRunning-2]
 	_ = x[TaskStatusRestarting-3]
@@ -17,13 +18,13 @@ func _() {
 	_ = x[TaskStatusCancelled-7]
 }
 
-const _TaskStatus_name = "PendingRunningRestartingCancellingCompletedFailedCancelled"
+const _TaskStatus_name = "UnspecifiedPendingRunningRestartingCancellingCompletedFailedCancelled"
 
-var _TaskStatus_index = [...]uint8{0, 7, 14, 24, 34, 43, 49, 58}
+var _TaskStatus_index = [...]uint8{0, 11, 18, 25, 35, 45, 54, 60, 69}
 
 func (i TaskStatus) String() string {
-	idx := int(i) - 1
-	if i < 1 || idx >= len(_TaskStatus_index)-1 {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_TaskStatus_index)-1 {
 		return "TaskStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return _TaskStatus_name[_TaskStatus_index[idx]:_TaskStatus_index[idx+1]]
