@@ -61,16 +61,13 @@ func TestRunnerStart(t *testing.T) {
 	// Create mock client. The driver and the injected MCP server now connect to
 	// this server directly (over the host network), so it must answer the
 	// driver's started/stopped events, its first-run brief (ListLinks), and the
-	// agent's get_my_task (GetTaskDetails).
+	// agent's get_my_task (GetTask + ListEventsByTask + ListLinks).
 	mock := &xagentclient.ClientMock{
 		CreateTaskTokenFunc: func(_ context.Context, req *xagentv1.CreateTaskTokenRequest) (*xagentv1.CreateTaskTokenResponse, error) {
 			return &xagentv1.CreateTaskTokenResponse{Token: "test-token"}, nil
 		},
 		SubmitRunnerEventsFunc: func(_ context.Context, req *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 			return &xagentv1.SubmitRunnerEventsResponse{}, nil
-		},
-		GetTaskDetailsFunc: func(_ context.Context, req *xagentv1.GetTaskDetailsRequest) (*xagentv1.GetTaskDetailsResponse, error) {
-			return &xagentv1.GetTaskDetailsResponse{Task: task.Proto("")}, nil
 		},
 		// The driver reads its task at startup to fork on shell_session; this
 		// task has none, so it takes the normal agent path.
@@ -163,11 +160,12 @@ func TestRunnerStart(t *testing.T) {
 	err = docker.ContainerRemove(t.Context(), "xagent-1", container.RemoveOptions{})
 	assert.NilError(t, err)
 
-	// Verify the driver fetched the first-run brief's links exactly once, and
-	// that GetTaskDetails was called once — by the dummy agent's get_my_task tool
-	// call, not the driver (the driver no longer fetches the aggregator).
-	assert.Assert(t, cmp.Len(mock.ListLinksCalls(), 1))
-	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 1))
+	// Verify ListLinks was called twice — once by the driver's first-run brief
+	// and once by the dummy agent's get_my_task tool call — and that
+	// GetTaskDetails was never called: neither the driver nor get_my_task fetches
+	// the aggregator any more.
+	assert.Assert(t, cmp.Len(mock.ListLinksCalls(), 2))
+	assert.Assert(t, cmp.Len(mock.GetTaskDetailsCalls(), 0))
 
 	// Verify the driver reported its own lifecycle: started, then stopped.
 	assert.DeepEqual(t, testx.ExtractField(mock.SubmittedRunnerEvents(), "Event"), []string{"started", "stopped"})
