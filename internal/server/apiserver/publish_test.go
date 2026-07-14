@@ -34,7 +34,7 @@ func TestCreateTask_Publishes(t *testing.T) {
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task", ID: resp.Task.Id},
-			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_events", ID: resp.Task.Id},
 		},
 		OrgID:  org.OrgID,
 		Runner: "r",
@@ -68,7 +68,7 @@ func TestUpdateTask_Publishes(t *testing.T) {
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: resp.Task.Id},
-			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_events", ID: resp.Task.Id},
 		},
 		OrgID:  org.OrgID,
 		Runner: "r",
@@ -100,7 +100,7 @@ func TestCancelTask_Publishes(t *testing.T) {
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "cancelled", Type: "task", ID: resp.Task.Id},
-			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_events", ID: resp.Task.Id},
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
@@ -138,7 +138,7 @@ func TestArchiveTask_Publishes(t *testing.T) {
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "archived", Type: "task", ID: resp.Task.Id},
-			{Action: "appended", Type: "task_logs", ID: resp.Task.Id},
+			{Action: "appended", Type: "task_events", ID: resp.Task.Id},
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,
@@ -174,7 +174,7 @@ func TestUploadLogs_Publishes(t *testing.T) {
 
 	assert.DeepEqual(t, pub.PublishedNotifications(), []model.Notification{{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: resp.Task.Id}},
+		Resources: []model.NotificationResource{{Action: "appended", Type: "task_events", ID: resp.Task.Id}},
 		OrgID:     org.OrgID,
 		UserID:    org.UserID,
 	}}, cmpopts.IgnoreFields(model.Notification{}, "Time", "ChannelMessage"))
@@ -319,7 +319,7 @@ func TestSubmitRunnerEvents_Publishes(t *testing.T) {
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: taskResp.Task.Id},
-			{Action: "appended", Type: "task_logs", ID: taskResp.Task.Id},
+			{Action: "appended", Type: "task_events", ID: taskResp.Task.Id},
 		},
 		OrgID:  org.OrgID,
 		UserID: org.UserID,

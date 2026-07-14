@@ -151,7 +151,7 @@ func (a *Archiver) archive(ctx context.Context, due store.TaskDueForArchive) (bo
 			Type: "change",
 			Resources: []model.NotificationResource{
 				{Action: "archived", Type: "task", ID: due.ID},
-				{Action: "appended", Type: "task_logs", ID: due.ID},
+				{Action: "appended", Type: "task_events", ID: due.ID},
 			},
 			OrgID: due.OrgID,
 			Time:  time.Now(),

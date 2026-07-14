@@ -29,7 +29,7 @@ func (s *Server) SubmitRunnerEvents(ctx context.Context, req *xagentv1.SubmitRun
 			Type: "change",
 			Resources: []model.NotificationResource{
 				{Action: "updated", Type: "task", ID: event.TaskID},
-				{Action: "appended", Type: "task_logs", ID: event.TaskID},
+				{Action: "appended", Type: "task_events", ID: event.TaskID},
 			},
 			OrgID:    caller.OrgID,
 			UserID:   caller.ID,
