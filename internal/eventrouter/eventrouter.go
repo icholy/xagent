@@ -340,7 +340,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 			notification.Resources = []model.NotificationResource{
 				{Action: "updated", Type: "task", ID: taskID},
 				{Action: "updated", Type: "event", ID: event.ID},
-				{Action: "appended", Type: "task_logs", ID: taskID},
+				{Action: "appended", Type: "task_events", ID: taskID},
 			}
 			notification.ChannelMessage = fmt.Sprintf("Task %d: %s (%s)", taskID, input.Description, input.URL)
 			return tx.Commit()
@@ -362,7 +362,7 @@ func (r *Router) attach(ctx context.Context, taskID int64, input InputEvent, org
 		notification.Resources = []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: task.ID},
 			{Action: "updated", Type: "event", ID: event.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		notification.Runner = task.PendingRunner()
 		if wasDone {
@@ -491,7 +491,7 @@ func (r *Router) create(ctx context.Context, input InputEvent, orgID int64, rule
 			Time:  time.Now(),
 			Resources: []model.NotificationResource{
 				{Action: "created", Type: "task", ID: task.ID},
-				{Action: "appended", Type: "task_logs", ID: task.ID},
+				{Action: "appended", Type: "task_events", ID: task.ID},
 			},
 			Runner:         task.PendingRunner(),
 			ChannelMessage: fmt.Sprintf("Task %d created by routing rule for event: %s (%s)", task.ID, input.Description, input.URL),

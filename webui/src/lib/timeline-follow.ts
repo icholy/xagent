@@ -1,7 +1,7 @@
 // TimelineFollowers bridges the org-wide SSE stream to the task timelines
 // mounted in the React tree. A task's timeline (see use-task-timeline) is a
 // bidirectional infinite query whose fetchNextPage lives inside a component; the
-// org-wide SSE stream (use-org-sse) — where live task_logs signals arrive —
+// org-wide SSE stream (use-org-sse) — where live task_events signals arrive —
 // can't reach it directly. A mounted timeline registers a follow callback here
 // keyed by task id, and the SSE handler calls notify() so a signal fetches only
 // the newer page (an append) instead of invalidating and re-fetching the whole

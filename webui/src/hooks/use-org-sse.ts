@@ -35,9 +35,9 @@ function invalidateResource(
         queryKey: createConnectQueryKey({ schema: listTasks, cardinality: 'finite' }),
       })
       break
-    case 'task_logs':
-      // The logs table is gone; reports and lifecycle transitions are events on
-      // the task's stream. A task_logs change means the stream grew. The
+    case 'task_events':
+      // Reports and lifecycle transitions are events on the task's stream. A
+      // task_events change means the stream grew. The
       // timeline is an append-only bidirectional infinite query, so instead of
       // invalidating (which would re-fetch every loaded page), drive its
       // live-follow: fetch only the newer page and append it at the tail.

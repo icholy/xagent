@@ -147,7 +147,7 @@ func (s *Server) CreateTask(ctx context.Context, req *xagentv1.CreateTaskRequest
 		Type: "change",
 		Resources: []model.NotificationResource{
 			{Action: "created", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		},
 		OrgID:          caller.OrgID,
 		Runner:         task.PendingRunner(),
@@ -258,7 +258,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{
 			{Action: "updated", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		if req.Start {
 			notification.ChannelMessage = fmt.Sprintf("Task %d queued: %s.", task.ID, strings.Join(changed, ", "))
@@ -326,7 +326,7 @@ func (s *Server) ArchiveTask(ctx context.Context, req *xagentv1.ArchiveTaskReque
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{
 			{Action: "archived", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		notification.ChannelMessage = fmt.Sprintf("Task %d archived.", task.ID)
 		return tx.Commit()
@@ -392,7 +392,7 @@ func (s *Server) UnarchiveTask(ctx context.Context, req *xagentv1.UnarchiveTaskR
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{
 			{Action: "unarchived", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		return tx.Commit()
 	})
@@ -457,7 +457,7 @@ func (s *Server) CancelTask(ctx context.Context, req *xagentv1.CancelTaskRequest
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{
 			{Action: "cancelled", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		// Only the Pending->Cancelled branch is terminal here; the Running->
 		// Cancelling branch will produce its terminal "cancelled" message via
@@ -528,7 +528,7 @@ func (s *Server) RestartTask(ctx context.Context, req *xagentv1.RestartTaskReque
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{
 			{Action: "restarted", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		notification.ChannelMessage = fmt.Sprintf("Task %d restart requested.", task.ID)
 		return tx.Commit()

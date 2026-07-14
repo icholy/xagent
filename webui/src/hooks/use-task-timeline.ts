@@ -13,7 +13,7 @@ import { useVisibilityInterval } from './use-visibility-interval'
 // refetchInterval, no invalidation of loaded pages.
 const PAGE_SIZE = 50
 
-// New-entry detection is driven by the SSE task_logs signal (→ follow()). A
+// New-entry detection is driven by the SSE task_events signal (→ follow()). A
 // dropped or missed signal would stall the tail until the next signal or an SSE
 // reconnect, so poll follow() on an interval as a backstop. follow() is a cheap
 // one-page tail-fetch (an idle poll is one empty-page request), and
@@ -36,7 +36,7 @@ function dropTrailingEmpty(
 
 // useTaskTimeline serves the task detail view's activity timeline as a
 // bidirectional infinite query: it opens at the newest page, loads older pages
-// via loadOlder, and follows the tail on each SSE task_logs signal.
+// via loadOlder, and follows the tail on each SSE task_events signal.
 export function useTaskTimeline(taskId: bigint) {
   const transport = useTransport()
   const queryClient = useQueryClient()
@@ -79,7 +79,7 @@ export function useTaskTimeline(taskId: bigint) {
     )
   }, [fetchNextPage, queryClient, transport, input])
 
-  // A task_logs SSE signal for this task arrives on the org-wide stream
+  // A task_events SSE signal for this task arrives on the org-wide stream
   // (use-org-sse). Register so that signal drives our live-follow directly.
   useEffect(
     () => timelineFollowers.register(String(taskId), () => void follow()),
@@ -87,7 +87,7 @@ export function useTaskTimeline(taskId: bigint) {
   )
 
   // Backstop the SSE-driven live-follow with a visibility-gated interval so a
-  // dropped task_logs signal can't stall the tail longer than the poll period.
+  // dropped task_events signal can't stall the tail longer than the poll period.
   // The poll is skipped while the tab is hidden (a background tab has closed the
   // SSE and reconnects + resyncs on foreground).
   useVisibilityInterval(() => void follow(), FOLLOW_POLL_MS)

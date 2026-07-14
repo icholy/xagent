@@ -91,7 +91,7 @@ function TaskDetail() {
   // The single activity view is the timeline: every instruction, external
   // event, report, lifecycle transition, and link the task produced, in order.
   // It is a bidirectional infinite query — opens at the tail, loads older pages
-  // on demand, and follows the tail on each SSE task_logs signal.
+  // on demand, and follows the tail on each SSE task_events signal.
   const {
     timeline,
     follow: followTimeline,

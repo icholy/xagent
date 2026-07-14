@@ -55,7 +55,7 @@ func (s *Server) UploadLogs(ctx context.Context, req *xagentv1.UploadLogsRequest
 	}
 	s.publish(model.Notification{
 		Type:      "change",
-		Resources: []model.NotificationResource{{Action: "appended", Type: "task_logs", ID: req.TaskId}},
+		Resources: []model.NotificationResource{{Action: "appended", Type: "task_events", ID: req.TaskId}},
 		OrgID:     caller.OrgID,
 		UserID:    caller.ID,
 		ClientID:  caller.ClientID,

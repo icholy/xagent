@@ -94,7 +94,7 @@ func (s *Server) OpenShell(ctx context.Context, req *xagentv1.OpenShellRequest) 
 		notification.Runner = task.PendingRunner()
 		notification.Resources = []model.NotificationResource{
 			{Action: "restarted", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_logs", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
 		}
 		notification.ChannelMessage = fmt.Sprintf("Shell session opened for task %d.", task.ID)
 		return tx.Commit()
