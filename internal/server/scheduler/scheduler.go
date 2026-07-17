@@ -26,6 +26,20 @@ import (
 	"github.com/icholy/xagent/internal/store"
 )
 
+//go:generate go tool moq -out store_moq_test.go . Store
+
+// Store is the subset of *store.Store the scheduler uses. The signatures match
+// the real methods exactly, so *store.Store satisfies it unchanged; tests drive a
+// generated StoreMock instead of a live database.
+type Store interface {
+	WithTx(ctx context.Context, tx *sql.Tx, f func(tx *sql.Tx) error) error
+	ClaimDueSchedules(ctx context.Context, tx *sql.Tx, limit int) ([]*model.Schedule, error)
+	CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) error
+	CreateEvent(ctx context.Context, tx *sql.Tx, event *model.Event) error
+	AdvanceSchedule(ctx context.Context, tx *sql.Tx, id int64, orgID int64, adv store.ScheduleAdvance) error
+	UpdateSchedule(ctx context.Context, tx *sql.Tx, sched *model.Schedule) error
+}
+
 // DefaultInterval is how often the scheduler tick fires when no override is set.
 // A 10s tick bounds firing latency to well under the minute-resolution cron grid
 // while keeping DB load negligible (the partial index makes each scan
@@ -37,7 +51,7 @@ const DefaultBatchSize = 100
 
 // Scheduler periodically fires due schedules into real task runs.
 type Scheduler struct {
-	store     *store.Store
+	store     Store
 	publisher pubsub.Publisher
 	interval  time.Duration
 	batchSize int
@@ -46,7 +60,7 @@ type Scheduler struct {
 
 // Options configures the Scheduler.
 type Options struct {
-	Store     *store.Store
+	Store     Store
 	Publisher pubsub.Publisher
 	Interval  time.Duration
 	BatchSize int
@@ -103,6 +117,12 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 				return fmt.Errorf("fire schedule %d: %w", sched.ID, err)
 			}
 			notifications = append(notifications, n)
+		}
+		// Commit the batch: every fire's task creation and schedule advance land
+		// together. tx is nil only under a mocked store in tests (there is no real
+		// transaction to commit); the real WithTx always supplies one.
+		if tx == nil {
+			return nil
 		}
 		return tx.Commit()
 	})
