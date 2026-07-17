@@ -98,17 +98,13 @@ func (s *Schedule) Validate() error {
 // timestamp (disabled or never fired) maps to an unset proto field; a nil
 // LastTaskID maps to 0 ("never run").
 func (s *Schedule) Proto() *xagentv1.Schedule {
-	instructions := make([]*xagentv1.Instruction, len(s.Instructions))
-	for i, inst := range s.Instructions {
-		instructions[i] = &xagentv1.Instruction{Text: inst.Text, Url: inst.URL}
-	}
 	pb := &xagentv1.Schedule{
 		Id:           s.ID,
 		Name:         s.Name,
 		Workspace:    s.Workspace,
 		Runner:       s.Runner,
 		Namespace:    s.Namespace,
-		Instructions: instructions,
+		Instructions: make([]*xagentv1.Instruction, len(s.Instructions)),
 		CronExpr:     s.CronExpr,
 		Timezone:     s.Timezone,
 		Enabled:      s.Enabled,
@@ -116,6 +112,9 @@ func (s *Schedule) Proto() *xagentv1.Schedule {
 		CreatedBy:    s.CreatedBy,
 		CreatedAt:    timestamppb.New(s.CreatedAt),
 		UpdatedAt:    timestamppb.New(s.UpdatedAt),
+	}
+	for i, inst := range s.Instructions {
+		pb.Instructions[i] = &xagentv1.Instruction{Text: inst.Text, Url: inst.URL}
 	}
 	if s.NextRunAt != nil {
 		pb.NextRunAt = timestamppb.New(*s.NextRunAt)
@@ -127,4 +126,14 @@ func (s *Schedule) Proto() *xagentv1.Schedule {
 		pb.LastTaskId = *s.LastTaskID
 	}
 	return pb
+}
+
+// ScheduleInstructionsFromProto converts proto Instruction messages to the
+// schedule's template DTOs (the [{text, url}] JSONB shape).
+func ScheduleInstructionsFromProto(instructions []*xagentv1.Instruction) []ScheduleInstruction {
+	out := make([]ScheduleInstruction, len(instructions))
+	for i, inst := range instructions {
+		out[i] = ScheduleInstruction{Text: inst.Text, URL: inst.Url}
+	}
+	return out
 }
