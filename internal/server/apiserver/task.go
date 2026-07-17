@@ -214,14 +214,22 @@ func (s *Server) UpdateTask(ctx context.Context, req *xagentv1.UpdateTaskRequest
 			task.Name = req.Name
 			changed = append(changed, "name")
 		}
+		// An instruction only wakes the task when this same update actually starts
+		// it. CanStart mirrors Task.Start's success condition exactly (Start returns
+		// false only when !CanStart), so this predicts the wake without mutating the
+		// task yet — the real transition still happens via req.Start below. Tagging
+		// the event otherwise (e.g. adding an instruction to a COMPLETED task without
+		// start) would show a misleading "woke task" badge for a wake that never
+		// occurred.
+		woke := req.Start && task.CanStart()
 		for _, inst := range req.AddInstructions {
-			// Adding an instruction appends an instruction event (wake=true) to the
-			// stream instead of mutating a tasks.instructions column. The actual
-			// restart is driven by req.Start below via Task.Start(), exactly as before.
+			// Adding an instruction appends an instruction event to the stream instead
+			// of mutating a tasks.instructions column. The actual restart is driven by
+			// req.Start below via Task.Start(), exactly as before.
 			if err := s.store.CreateEvent(ctx, tx, &model.Event{
 				TaskID: task.ID,
 				OrgID:  task.OrgID,
-				Wake:   true,
+				Wake:   woke,
 				Payload: &model.InstructionPayload{
 					Text: inst.Text,
 					URL:  inst.Url,
