@@ -1,13 +1,13 @@
 package scheduler
 
 import (
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/icholy/xagent/internal/model"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"golang.org/x/sync/errgroup"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -174,17 +174,11 @@ func TestScheduler_Tick_ConcurrentFiresOnce(t *testing.T) {
 
 	sc := New(Options{Store: s})
 
-	var wg sync.WaitGroup
-	errs := make([]error, 2)
-	for i := range errs {
-		wg.Go(func() {
-			errs[i] = sc.Tick(ctx)
-		})
+	var g errgroup.Group
+	for range 2 {
+		g.Go(func() error { return sc.Tick(ctx) })
 	}
-	wg.Wait()
-	for _, err := range errs {
-		assert.NilError(t, err)
-	}
+	assert.NilError(t, g.Wait())
 
 	// Exactly one task despite two concurrent ticks.
 	page, err := s.ListTasksPage(ctx, nil, store.ListTasksPageParams{OrgID: org.OrgID, PageSize: 100})
