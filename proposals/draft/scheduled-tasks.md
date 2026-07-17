@@ -418,25 +418,8 @@ gone, but the schedule and its org are unaffected). This keeps schedules decoupl
 individual-user lifecycle, which is the whole point of an org-level resource.
 
 Enable/disable is split into its own `SetScheduleEnabled` RPC (rather than only living inside
-`UpdateSchedule`) because it's the one-click action the UI toolbar and CLI need most, and it has
+`UpdateSchedule`) because it's the one-click action the UI toolbar needs most, and it has
 distinct side effects (recompute vs null `next_run_at`).
-
-### CLI
-
-New `xagent schedule` subcommand (sibling of `xagent task`), following that command's
-list/create/update/delete shape:
-
-```
-xagent schedule list
-xagent schedule create --workspace W --runner R --cron "0 9 * * 1-5" --tz America/Toronto \
-                       --instruction "…" [--name N] [--auto-archive 24h]
-xagent schedule update <id> [--cron …] [--tz …] [--instruction …]
-xagent schedule enable <id>
-xagent schedule disable <id>
-xagent schedule delete <id>
-```
-
-`--cron` is validated client-side too (fail fast) but the server is the source of truth.
 
 ### Web UI
 
@@ -447,12 +430,6 @@ form, a cron field with a human-readable "next 3 runs" preview computed from the
 expression, timezone select, instructions, auto-archive presets), and
 an inline enable/disable switch calling `SetScheduleEnabled`. Run `pnpm lint` in `webui/`
 before finishing.
-
-### MCP
-
-Optional, follow-up: expose `create_schedule` / `list_schedules` on the in-container `xagent`
-MCP server so an agent can set up its own recurring follow-up (e.g. "check this PR daily until
-merged"). Out of scope for the first cut; the RPC surface makes it a thin addition later.
 
 ## Implementation Plan
 
@@ -480,9 +457,7 @@ above it land.
    produces exactly one task + the right events, advances `next_run_at`, skips missed
    occurrences after a simulated downtime, and fires exactly once under two concurrent
    schedulers.
-5. **CLI** — Delivers: `xagent schedule` subcommand. Depends on: (3). Verifiable by: running the
-   commands end to end against a local server.
-6. **Web UI** — Delivers: the Schedules list + create/edit views. Depends on: (3). Verifiable
+5. **Web UI** — Delivers: the Schedules list + create/edit views. Depends on: (3). Verifiable
    by: rendering against seeded schedules; `pnpm lint` passes.
 
 ## Trade-offs
