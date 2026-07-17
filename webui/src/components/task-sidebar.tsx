@@ -87,6 +87,7 @@ export function TaskSidebar({
           <span className="flex items-center gap-1.5">
             <StatusBadge task={task} />
             <CommandBadge task={task} />
+            <ArchivedBadge task={task} />
           </span>
         )}
         <Button
@@ -116,14 +117,11 @@ export function TaskSidebar({
             <h1 className="text-[15px] font-semibold leading-snug text-pretty" title={title}>
               {title}
             </h1>
-            {Boolean(task.archived || task.namespace) && (
+            {task.namespace && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <ArchivedBadge task={task} />
-                {task.namespace && (
-                  <Badge variant="secondary" title="Namespace">
-                    {task.namespace}
-                  </Badge>
-                )}
+                <Badge variant="secondary" title="Namespace">
+                  {task.namespace}
+                </Badge>
               </div>
             )}
           </div>
