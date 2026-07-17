@@ -130,43 +130,15 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 // the tick commits.
 func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule) (model.Notification, error) {
 	now := time.Now()
-	task := &model.Task{
-		Name:        sched.Name,
-		Runner:      sched.Runner,
-		Workspace:   sched.Workspace,
-		Namespace:   sched.Namespace,
-		Status:      model.TaskStatusPending,
-		Command:     model.TaskCommandStart,
-		Version:     1,
-		OrgID:       sched.OrgID,
-		AutoArchive: sched.AutoArchive,
-	}
+	// The schedule owns the template -> task/events mapping. Insert the task, then
+	// seed its events (Events needs the assigned task.ID), so a scheduled task is
+	// indistinguishable from a hand-created one downstream.
+	task := sched.Task()
 	if err := s.store.CreateTask(ctx, tx, task); err != nil {
 		return model.Notification{}, err
 	}
-	// Seed the stream exactly as CreateTask does: the created event first (actor
-	// ScheduleActor, no prior status), then one wake-carrying instruction event
-	// per template instruction, so a scheduled task is indistinguishable from a
-	// hand-created one downstream.
-	if err := s.store.CreateEvent(ctx, tx, &model.Event{
-		TaskID: task.ID,
-		OrgID:  task.OrgID,
-		Payload: &model.LifecyclePayload{
-			Kind:     model.LifecycleKindCreated,
-			Actor:    model.ScheduleActor,
-			ToStatus: task.Status.Label(),
-		},
-	}); err != nil {
-		return model.Notification{}, err
-	}
-	for _, inst := range sched.Instructions {
-		payload := model.InstructionPayload(inst)
-		if err := s.store.CreateEvent(ctx, tx, &model.Event{
-			TaskID:  task.ID,
-			OrgID:   task.OrgID,
-			Wake:    true,
-			Payload: &payload,
-		}); err != nil {
+	for _, ev := range sched.Events(task) {
+		if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
 			return model.Notification{}, err
 		}
 	}

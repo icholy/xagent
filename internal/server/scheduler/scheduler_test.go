@@ -49,10 +49,11 @@ func createDueSchedule(t *testing.T, s *store.Store, org *teststore.Org, cronExp
 // (a created event attributed to ScheduleActor, then one instruction event per
 // template instruction), and its next_run_at is advanced past now.
 func TestScheduler_Tick_FiresDueSchedule(t *testing.T) {
-	// Not t.Parallel(): ClaimDueSchedules is server-wide (no org filter), so a tick
-	// claims every due schedule across the package. Serializing these tick tests
-	// keeps each one's fire count deterministic and avoids two big claim-and-fire
-	// transactions overlapping.
+	// ClaimDueSchedules is server-wide (no org filter), so a tick claims every due
+	// schedule in the database. Take the advisory lock guarding the due set so this
+	// test's schedules are the only due rows while it runs — no t.Parallel(), and no
+	// other package's due rows (e.g. the store's concurrent-claim test) get fired.
+	teststore.LockScheduleDueSet(t)
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()
@@ -113,10 +114,11 @@ func TestScheduler_Tick_FiresDueSchedule(t *testing.T) {
 // schedule that was due many times over a simulated downtime fires exactly once
 // on recovery and realigns to the grid, never backfilling the missed runs.
 func TestScheduler_Tick_SkipsMissedOccurrences(t *testing.T) {
-	// Not t.Parallel(): ClaimDueSchedules is server-wide (no org filter), so a tick
-	// claims every due schedule across the package. Serializing these tick tests
-	// keeps each one's fire count deterministic and avoids two big claim-and-fire
-	// transactions overlapping.
+	// ClaimDueSchedules is server-wide (no org filter), so a tick claims every due
+	// schedule in the database. Take the advisory lock guarding the due set so this
+	// test's schedules are the only due rows while it runs — no t.Parallel(), and no
+	// other package's due rows (e.g. the store's concurrent-claim test) get fired.
+	teststore.LockScheduleDueSet(t)
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()
@@ -150,10 +152,11 @@ func TestScheduler_Tick_SkipsMissedOccurrences(t *testing.T) {
 // schedule fires exactly once — one tick claims and fires it, the other skips the
 // locked row (and, once the fire commits, sees it is no longer due).
 func TestScheduler_Tick_ConcurrentFiresOnce(t *testing.T) {
-	// Not t.Parallel(): ClaimDueSchedules is server-wide (no org filter), so a tick
-	// claims every due schedule across the package. Serializing these tick tests
-	// keeps each one's fire count deterministic and avoids two big claim-and-fire
-	// transactions overlapping.
+	// ClaimDueSchedules is server-wide (no org filter), so a tick claims every due
+	// schedule in the database. Take the advisory lock guarding the due set so this
+	// test's schedules are the only due rows while it runs — no t.Parallel(), and no
+	// other package's due rows (e.g. the store's concurrent-claim test) get fired.
+	teststore.LockScheduleDueSet(t)
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()
@@ -188,10 +191,11 @@ func TestScheduler_Tick_ConcurrentFiresOnce(t *testing.T) {
 // create-time Validate) to reproduce a tz that has since disappeared from the tz
 // database.
 func TestScheduler_Tick_DisablesInvalidSchedule(t *testing.T) {
-	// Not t.Parallel(): ClaimDueSchedules is server-wide (no org filter), so a tick
-	// claims every due schedule across the package. Serializing these tick tests
-	// keeps each one's fire count deterministic and avoids two big claim-and-fire
-	// transactions overlapping.
+	// ClaimDueSchedules is server-wide (no org filter), so a tick claims every due
+	// schedule in the database. Take the advisory lock guarding the due set so this
+	// test's schedules are the only due rows while it runs — no t.Parallel(), and no
+	// other package's due rows (e.g. the store's concurrent-claim test) get fired.
+	teststore.LockScheduleDueSet(t)
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()

@@ -42,11 +42,11 @@ type Schedule struct {
 	Name      string `json:"name"`
 
 	// Task template — the same shape CreateTask takes.
-	Workspace    string        `json:"workspace"`
-	Runner       string        `json:"runner"`
-	Namespace    string        `json:"namespace,omitempty"`
+	Workspace    string                `json:"workspace"`
+	Runner       string                `json:"runner"`
+	Namespace    string                `json:"namespace,omitempty"`
 	Instructions []ScheduleInstruction `json:"instructions"`
-	AutoArchive  time.Duration `json:"auto_archive,omitempty"`
+	AutoArchive  time.Duration         `json:"auto_archive,omitempty"`
 
 	// Schedule spec.
 	CronExpr string `json:"cron_expr"`
@@ -60,6 +60,53 @@ type Schedule struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Task builds the occurrence task from the schedule's template: a fresh
+// pending/start task carrying the template's runner/workspace/namespace and
+// auto-archive. It is the schedule -> task half of a fire; the scheduler inserts
+// it, then seeds Events(task). The result is byte-for-byte the shape CreateTask
+// produces, so a scheduled task is indistinguishable from a hand-created one.
+func (s *Schedule) Task() *Task {
+	return &Task{
+		Name:        s.Name,
+		Runner:      s.Runner,
+		Workspace:   s.Workspace,
+		Namespace:   s.Namespace,
+		Status:      TaskStatusPending,
+		Command:     TaskCommandStart,
+		Version:     1,
+		OrgID:       s.OrgID,
+		AutoArchive: s.AutoArchive,
+	}
+}
+
+// Events returns the events to seed onto task for one occurrence: a
+// LifecycleKindCreated event attributed to ScheduleActor, then one wake-carrying
+// InstructionPayload event per template instruction (created event first, so the
+// timeline ordered by event id shows "Created" first). Call it after the task has
+// been inserted so task.ID is populated.
+func (s *Schedule) Events(task *Task) []*Event {
+	events := make([]*Event, 0, len(s.Instructions)+1)
+	events = append(events, &Event{
+		TaskID: task.ID,
+		OrgID:  task.OrgID,
+		Payload: &LifecyclePayload{
+			Kind:     LifecycleKindCreated,
+			Actor:    ScheduleActor,
+			ToStatus: task.Status.Label(),
+		},
+	})
+	for _, inst := range s.Instructions {
+		payload := InstructionPayload(inst)
+		events = append(events, &Event{
+			TaskID:  task.ID,
+			OrgID:   task.OrgID,
+			Wake:    true,
+			Payload: &payload,
+		})
+	}
+	return events
 }
 
 // Next returns the first occurrence strictly after `after`, evaluated in the

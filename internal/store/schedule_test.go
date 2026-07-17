@@ -121,11 +121,15 @@ func TestAdvanceSchedule(t *testing.T) {
 
 // TestClaimDueSchedules_Concurrent proves the FOR UPDATE SKIP LOCKED guarantee:
 // two callers claiming the due set at the same time partition it instead of both
-// claiming the same row. It seeds the entire due set for the store package (the
-// other schedule tests keep their rows out of the due set), so the two claims
-// must together cover exactly those rows, disjointly.
+// claiming the same row. It seeds the entire due set (the other schedule tests
+// keep their rows out of it), so the two claims must together cover exactly those
+// rows, disjointly.
 func TestClaimDueSchedules_Concurrent(t *testing.T) {
 	t.Parallel()
+	// Own the server-wide due set for this test's lifetime: ClaimDueSchedules has
+	// no org filter, so a scheduler Tick in another package would otherwise fire
+	// these rows out from under the claim.
+	teststore.LockScheduleDueSet(t)
 	s := teststore.New(t)
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()

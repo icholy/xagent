@@ -13,6 +13,44 @@ import (
 	"github.com/icholy/xagent/internal/store"
 )
 
+// scheduleDueSetLockKey is the fixed advisory-lock key guarding the server-wide
+// "due schedules" set. ClaimDueSchedules scans every org's due rows with no
+// filter, so a scheduler Tick in one test package and the store's concurrent
+// claim test in another would otherwise fire or steal each other's due rows.
+const scheduleDueSetLockKey int64 = 918273645
+
+// LockScheduleDueSet blocks until this test holds the exclusive advisory lock
+// guarding the server-wide schedule due set, then releases it on cleanup. Any
+// test that seeds due schedules or drives a scheduler Tick must take it first, so
+// due rows from different tests never coexist across parallel package binaries.
+// The lock is held on a dedicated connection for the test's lifetime.
+func LockScheduleDueSet(t *testing.T) {
+	t.Helper()
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	db, err := store.Open(dsn, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_lock($1)", scheduleDueSetLockKey); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", scheduleDueSetLockKey); err != nil {
+			t.Logf("pg_advisory_unlock: %v", err)
+		}
+		conn.Close()
+		db.Close()
+	})
+}
+
 // New creates a *store.Store connected to the test database.
 // It skips the test if TEST_DATABASE_URL is not set and registers
 // a cleanup function to close the database connection.
