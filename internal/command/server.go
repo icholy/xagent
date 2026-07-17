@@ -22,6 +22,7 @@ import (
 	"github.com/icholy/xagent/internal/server/atlassianserver"
 	"github.com/icholy/xagent/internal/server/githubserver"
 	"github.com/icholy/xagent/internal/server/notifyserver"
+	"github.com/icholy/xagent/internal/server/scheduler"
 	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/x/logctx"
 	"github.com/icholy/xagent/internal/x/otelx"
@@ -133,6 +134,18 @@ var ServerCommand = &cli.Command{
 			Usage:   "Maximum number of tasks the archiver will archive per tick",
 			Value:   archiver.DefaultBatchSize,
 			Sources: cli.EnvVars("XAGENT_ARCHIVE_BATCH"),
+		},
+		&cli.DurationFlag{
+			Name:    "schedule-poll",
+			Usage:   "How often to scan for due schedules and fire them into tasks. 0 disables the scheduler.",
+			Value:   scheduler.DefaultInterval,
+			Sources: cli.EnvVars("XAGENT_SCHEDULE_POLL"),
+		},
+		&cli.IntFlag{
+			Name:    "schedule-batch",
+			Usage:   "Maximum number of schedules the scheduler will fire per tick",
+			Value:   scheduler.DefaultBatchSize,
+			Sources: cli.EnvVars("XAGENT_SCHEDULE_BATCH"),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -305,6 +318,23 @@ var ServerCommand = &cli.Command{
 			}()
 		} else {
 			slog.Info("auto-archive disabled (--archive-poll=0)")
+		}
+
+		if interval := cmd.Duration("schedule-poll"); interval > 0 {
+			sched := scheduler.New(scheduler.Options{
+				Store:     st,
+				Publisher: ps,
+				Interval:  interval,
+				BatchSize: cmd.Int("schedule-batch"),
+				Log:       slog.With("component", "scheduler"),
+			})
+			go func() {
+				if err := sched.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					slog.Error("scheduler exited with error", "err", err)
+				}
+			}()
+		} else {
+			slog.Info("scheduler disabled (--schedule-poll=0)")
 		}
 
 		go func() {
