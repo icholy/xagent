@@ -110,13 +110,10 @@ CREATE TABLE schedules (
     timezone     TEXT   NOT NULL DEFAULT 'UTC',
     enabled      BOOLEAN NOT NULL DEFAULT TRUE,
 
-    -- Policy knob (see edge cases).
-    overlap      SMALLINT NOT NULL DEFAULT 0,   -- 0=allow, 1=skip if last run not terminal
-
     -- Scheduler bookkeeping.
     next_run_at  TIMESTAMP,                     -- next fire time (UTC); NULL when disabled/paused
     last_run_at  TIMESTAMP,                     -- last time we fired
-    last_task_id BIGINT REFERENCES tasks(id) ON DELETE SET NULL,
+    last_task_id BIGINT REFERENCES tasks(id) ON DELETE SET NULL,  -- most recent run, for the UI
     version      BIGINT NOT NULL DEFAULT 0,     -- optimistic-concurrency guard, mirrors tasks.version
 
     created_at   TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
@@ -180,7 +177,6 @@ type Schedule struct {
     Timezone    string
     Enabled     bool
 
-    Overlap     OverlapPolicy   // OverlapAllow | OverlapSkip
 
     NextRunAt   *time.Time      // UTC
     LastRunAt   *time.Time      // UTC
@@ -219,7 +215,7 @@ New `internal/store/schedule.go` + `internal/store/sql/queries/schedule.sql`, mi
 -- the same schedule. The locks are held until the caller's transaction commits, by which
 -- point next_run_at has been advanced past now, so the row is no longer due.
 SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions,
-       auto_archive, cron_expr, timezone, enabled, overlap,
+       auto_archive, cron_expr, timezone, enabled,
        next_run_at, last_run_at, last_task_id, version, created_at, updated_at
 FROM schedules
 WHERE enabled = TRUE
@@ -282,15 +278,13 @@ Each `Tick`:
 1. Opens a transaction and calls `ClaimDueSchedules(batchSize)`. The claimed rows are locked
    for the duration of the transaction; concurrent schedulers skip them.
 2. For each claimed schedule, inside the *same* transaction:
-   a. If `overlap = OverlapSkip` and `last_task_id`'s status is non-terminal (look it up via
-      `GetTask`; `model.TaskStatus.IsTerminal()` on `internal/model/task.go`), skip firing this
-      occurrence but still advance `next_run_at` (below).
-   b. Otherwise create the task exactly as `CreateTask` does — `CreateTask` +
-      `LifecycleKindCreated` event (actor `ScheduleActor{ID}`, a new `model.Actor` sibling of
-      `UserActor`/`RunnerActor`) + one `InstructionPayload` event per instruction. `org_id` is
-      the schedule's. This is an org-level worker action with no per-user permission check — the
-      same way the archiver archives with `RunnerActor` (§ auth).
-   c. Compute the next fire time as the first occurrence strictly after `now`
+   a. Create the task exactly as `CreateTask` does — `CreateTask` + `LifecycleKindCreated` event
+      (actor `ScheduleActor{ID}`, a new `model.Actor` sibling of `UserActor`/`RunnerActor`) + one
+      `InstructionPayload` event per instruction. `org_id` is the schedule's. This is an
+      org-level worker action with no per-user permission check — the same way the archiver
+      archives with `RunnerActor` (§ auth). The fire is unconditional: the scheduler never
+      inspects the previous run, it just creates the task when the schedule comes due.
+   b. Compute the next fire time as the first occurrence strictly after `now`
       (`s.Next(time.Now())`, § missed runs) and call `AdvanceSchedule(next, firedAt, newTaskID)`.
 3. Commit. Committing both releases the `SKIP LOCKED` locks *and* persists the advanced
    `next_run_at`, so the schedule is no longer due — a crash before commit simply rolls the
@@ -313,9 +307,9 @@ context-cancellation shutdown.
 There is no new execution machinery. A fire is a `tasks` insert with `Command = Start`. The
 runner's existing poll (`ListTasksForRunner`, `WHERE command != 0`) claims it, starts the
 container, and drives it through the normal lifecycle. `last_task_id` links the schedule to its
-most recent run for overlap checks and for the UI ("last run: #1234, completed"). Because the
-schedule row is advanced and committed the instant the task is created, the schedule's cadence
-is completely independent of how long that task takes to run.
+most recent run for the UI ("last run: #1234, completed"). Because the schedule row is advanced
+and committed the instant the task is created, the schedule's cadence is completely independent
+of how long that task takes to run.
 
 ### Edge cases
 
@@ -334,13 +328,11 @@ schedule fires at most once when it comes due, regardless of how long the outage
 is still capped at `batchSize` tasks total (across *distinct* schedules) as ordinary
 back-pressure, but a single schedule can never enqueue a backlog.
 
-**Overlapping runs of the same schedule.** Controlled by `overlap`:
-
-- `OverlapAllow` (default): a new occurrence fires even if the previous run is still going. Two
-  concurrent tasks for the same schedule is fine — they're independent task rows.
-- `OverlapSkip`: if `last_task_id` is non-terminal, skip the fire but still advance
-  `next_run_at`. Suits jobs that must never run concurrently with themselves (e.g. a heavy
-  migration sweep). Implemented with the `GetTask` + `IsTerminal()` check in step 2a.
+**Overlapping runs of the same schedule.** Allowed, always. Each occurrence just creates a new
+task row; if the previous run is still going when the next occurrence fires, the two run
+concurrently as independent tasks. The scheduler never inspects the prior run — there is no
+overlap policy. A schedule that shouldn't run concurrently with itself should be spaced far
+enough apart in its cron expression, or made idempotent.
 
 **DST / timezone drift.** Because `Next` is evaluated in the schedule's `time.Location` every
 time (never by adding a fixed 24h), local-time semantics hold across DST transitions:
@@ -384,17 +376,14 @@ message Schedule {
   string cron_expr = 7;
   string timezone = 8;                      // IANA name; default "UTC"
   bool enabled = 9;
-  OverlapPolicy overlap = 10;
-  google.protobuf.Duration auto_archive = 11;
-  google.protobuf.Timestamp next_run_at = 12;
-  google.protobuf.Timestamp last_run_at = 13;
-  int64 last_task_id = 14;                  // 0 = never run
-  string created_by = 15;
-  google.protobuf.Timestamp created_at = 16;
-  google.protobuf.Timestamp updated_at = 17;
+  google.protobuf.Duration auto_archive = 10;
+  google.protobuf.Timestamp next_run_at = 11;
+  google.protobuf.Timestamp last_run_at = 12;
+  int64 last_task_id = 13;                  // 0 = never run
+  string created_by = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
 }
-
-enum OverlapPolicy { OVERLAP_ALLOW = 0; OVERLAP_SKIP = 1; }
 
 message CreateScheduleRequest {
   string name = 1;
@@ -405,8 +394,7 @@ message CreateScheduleRequest {
   string cron_expr = 6;
   string timezone = 7;
   bool enabled = 8;                         // default true
-  OverlapPolicy overlap = 9;
-  google.protobuf.Duration auto_archive = 10;
+  google.protobuf.Duration auto_archive = 9;
 }
 // UpdateScheduleRequest mirrors CreateTask/UpdateTask: id + the mutable fields. Changing
 // cron_expr or timezone recomputes next_run_at server-side.
@@ -441,7 +429,7 @@ list/create/update/delete shape:
 ```
 xagent schedule list
 xagent schedule create --workspace W --runner R --cron "0 9 * * 1-5" --tz America/Toronto \
-                       --instruction "…" [--name N] [--auto-archive 24h] [--overlap skip]
+                       --instruction "…" [--name N] [--auto-archive 24h]
 xagent schedule update <id> [--cron …] [--tz …] [--instruction …]
 xagent schedule enable <id>
 xagent schedule disable <id>
@@ -456,7 +444,7 @@ A new "Schedules" section in the v2 UI (`webui/`, TanStack Router/Query per the 
 a list view (name, cron, timezone, enabled toggle, next run, last run + status link to
 `last_task_id`), a create/edit form (workspace + runner pickers reused from the task-create
 form, a cron field with a human-readable "next 3 runs" preview computed from the parsed
-expression, timezone select, instructions, auto-archive presets, an overlap select), and
+expression, timezone select, instructions, auto-archive presets), and
 an inline enable/disable switch calling `SetScheduleEnabled`. Run `pnpm lint` in `webui/`
 before finishing.
 
@@ -476,7 +464,7 @@ above it land.
    Verifiable by: `mise run up:test` applies the migration; `migrate:up`/`migrate:down`
    round-trip cleanly.
 2. **Model + store** — Delivers: `internal/model/schedule.go` (`Schedule`, `Next`, `Validate`,
-   `OverlapPolicy`, `ScheduleActor`), `schedule.sql` queries (incl.
+   `ScheduleActor`), `schedule.sql` queries (incl.
    `ClaimDueSchedules` with `FOR UPDATE SKIP LOCKED` and `AdvanceSchedule`), and
    `internal/store/schedule.go`. Adds `github.com/robfig/cron/v3` to `go.mod`. Depends on: (1).
    Verifiable by: store unit tests against the test Postgres (`internal/store/schedule_test.go`)
@@ -490,8 +478,8 @@ above it land.
    `internal/command/server.go` with `--schedule-poll` / `--schedule-batch`. Depends on: (2),
    (3). Verifiable by: a `Tick`-driven test (like `archiver`'s) asserting a due schedule
    produces exactly one task + the right events, advances `next_run_at`, skips missed
-   occurrences after a simulated downtime, honors the overlap policy, and fires exactly once
-   under two concurrent schedulers.
+   occurrences after a simulated downtime, and fires exactly once under two concurrent
+   schedulers.
 5. **CLI** — Delivers: `xagent schedule` subcommand. Depends on: (3). Verifiable by: running the
    commands end to end against a local server.
 6. **Web UI** — Delivers: the Schedules list + create/edit views. Depends on: (3). Verifiable
@@ -505,7 +493,7 @@ above it land.
 | **Optimistic `version` claim (mirror the archiver exactly)** | Zero new locking concepts; identical to auto-archive | A duplicated fire is a duplicated *real task run*, not an idempotent no-op; correct only while the server is single-replica, which the prompt explicitly rules out |
 | **Postgres advisory lock around the whole tick** (one leader) | Dead simple; one scheduler runs at a time | Serializes all scheduling through one instance (no horizontal scale of the scheduler); a stuck leader stalls every schedule; coarser than per-row claiming |
 | **External cron → `xagent task create`** (status quo) | No code | Invisible to the product; no tenancy/scope integration; every integration reinvents state; not what the issue asks for |
-| **Compute due-ness at read time (no `next_run_at` column)** | No bookkeeping column to advance | Re-parses cron for every row every tick; can't express last-run/overlap without more columns anyway |
+| **Compute due-ness at read time (no `next_run_at` column)** | No bookkeeping column to advance | Re-parses cron for every row every tick; can't express last-run without more columns anyway |
 
 The proposed shape is the smallest thing that is *correct across instances* while staying
 maximally consistent with what already exists: the worker is the archiver, the fire is
@@ -515,9 +503,9 @@ non-idempotent side effect that the archiver's optimistic check wasn't designed 
 
 ## Open Questions
 
-1. **Per-schedule concurrency vs global.** `OverlapSkip` prevents a schedule from overlapping
-   *itself*. Do we also need a per-workspace or per-runner concurrency cap for scheduled tasks
-   so a burst of schedules can't swamp a runner? Likely a separate concern (runner-side
+1. **Runner concurrency cap.** Schedules fire unconditionally, so a schedule can overlap itself
+   and many schedules can come due at once. Do we need a per-workspace or per-runner concurrency
+   cap so a burst of scheduled tasks can't swamp a runner? Likely a separate concern (runner-side
    admission control), noted so the schema doesn't need to carry it prematurely.
 2. **Timezone list source.** The UI timezone picker needs the IANA name list. Ship a static
    bundled list, or expose a `ListTimezones` helper RPC derived from the server's tz database
