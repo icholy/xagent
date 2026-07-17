@@ -76,7 +76,16 @@ func (s *Server) CreateSchedule(ctx context.Context, req *xagentv1.CreateSchedul
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.InfoContext(ctx, "schedule created", "id", sched.ID, "runner", sched.Runner, "workspace", sched.Workspace)
-	s.publishScheduleChange(caller, "created", sched.ID)
+	// A schedule change only refreshes the Web UI; it never wakes a runner (the
+	// scheduler worker, L4, creates the tasks), so no Runner is set.
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "created", Type: "schedule", ID: sched.ID}},
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.CreateScheduleResponse{Schedule: sched.Proto()}, nil
 }
 
@@ -180,7 +189,14 @@ func (s *Server) UpdateSchedule(ctx context.Context, req *xagentv1.UpdateSchedul
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.InfoContext(ctx, "schedule updated", "id", sched.ID, "runner", sched.Runner, "workspace", sched.Workspace)
-	s.publishScheduleChange(caller, "updated", sched.ID)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "schedule", ID: sched.ID}},
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.UpdateScheduleResponse{Schedule: sched.Proto()}, nil
 }
 
@@ -197,7 +213,14 @@ func (s *Server) DeleteSchedule(ctx context.Context, req *xagentv1.DeleteSchedul
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.InfoContext(ctx, "schedule deleted", "id", req.Id)
-	s.publishScheduleChange(caller, "deleted", req.Id)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "deleted", Type: "schedule", ID: req.Id}},
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.DeleteScheduleResponse{}, nil
 }
 
@@ -245,7 +268,14 @@ func (s *Server) SetScheduleEnabled(ctx context.Context, req *xagentv1.SetSchedu
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	s.log.InfoContext(ctx, "schedule enabled set", "id", sched.ID, "enabled", sched.Enabled)
-	s.publishScheduleChange(caller, "updated", sched.ID)
+	s.publish(model.Notification{
+		Type:      "change",
+		Resources: []model.NotificationResource{{Action: "updated", Type: "schedule", ID: sched.ID}},
+		OrgID:     caller.OrgID,
+		UserID:    caller.ID,
+		ClientID:  caller.ClientID,
+		Time:      time.Now(),
+	})
 	return &xagentv1.SetScheduleEnabledResponse{Schedule: sched.Proto()}, nil
 }
 
@@ -257,18 +287,4 @@ func instructionsFromProto(instructions []*xagentv1.Instruction) []model.Schedul
 		out[i] = model.ScheduleInstruction{Text: inst.Text, URL: inst.Url}
 	}
 	return out
-}
-
-// publishScheduleChange emits the change notification for a schedule mutation so
-// the Web UI refreshes. Schedules never wake a runner directly — the scheduler
-// worker (L4) creates tasks — so no Runner is set.
-func (s *Server) publishScheduleChange(caller *apiauth.UserInfo, action string, id int64) {
-	s.publish(model.Notification{
-		Type:      "change",
-		Resources: []model.NotificationResource{{Action: action, Type: "schedule", ID: id}},
-		OrgID:     caller.OrgID,
-		UserID:    caller.ID,
-		ClientID:  caller.ClientID,
-		Time:      time.Now(),
-	})
 }
