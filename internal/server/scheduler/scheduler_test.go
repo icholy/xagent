@@ -12,38 +12,6 @@ import (
 	"gotest.tools/v3/assert/cmp"
 )
 
-// orgTaskCount lists the tasks in an org so a test can assert exactly how many a
-// tick materialized. The claim query is server-wide, so a tick may also fire
-// unrelated orgs' schedules; scoping every assertion to the test's own org keeps
-// it robust against that.
-func orgTaskCount(t *testing.T, s *store.Store, orgID int64) int {
-	t.Helper()
-	page, err := s.ListTasksPage(t.Context(), nil, store.ListTasksPageParams{OrgID: orgID, PageSize: 100})
-	assert.NilError(t, err)
-	return len(page.Items)
-}
-
-// createDueSchedule seeds an enabled schedule whose next_run_at is already in the
-// past, so the very next tick claims and fires it. next lets a caller simulate
-// downtime by placing the missed occurrence arbitrarily far back.
-func createDueSchedule(t *testing.T, s *store.Store, org *teststore.Org, cronExpr, tz string, next time.Time, instructions ...model.ScheduleInstruction) *model.Schedule {
-	t.Helper()
-	sched := &model.Schedule{
-		OrgID:        org.OrgID,
-		CreatedBy:    org.UserID,
-		Name:         "nightly",
-		Workspace:    "w",
-		Runner:       "r",
-		Instructions: instructions,
-		CronExpr:     cronExpr,
-		Timezone:     tz,
-		Enabled:      true,
-		NextRunAt:    &next,
-	}
-	assert.NilError(t, s.CreateSchedule(t.Context(), nil, sched))
-	return sched
-}
-
 // TestScheduler_Tick_FiresDueSchedule is the scheduler's happy path: a due
 // schedule produces exactly one task, seeded identically to a hand-created one
 // (a created event attributed to ScheduleActor, then one instruction event per
@@ -58,18 +26,33 @@ func TestScheduler_Tick_FiresDueSchedule(t *testing.T) {
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()
 
+	// A schedule whose next_run_at is already in the past, so this tick fires it.
 	before := time.Now()
 	past := before.Add(-time.Hour)
-	sched := createDueSchedule(t, s, org, "0 9 * * *", "UTC", past,
-		model.ScheduleInstruction{Text: "bump deps", URL: "https://example.com/deps"},
-		model.ScheduleInstruction{Text: "groom changelog"},
-	)
+	sched := &model.Schedule{
+		OrgID:     org.OrgID,
+		CreatedBy: org.UserID,
+		Name:      "nightly",
+		Workspace: "w",
+		Runner:    "r",
+		Instructions: []model.ScheduleInstruction{
+			{Text: "bump deps", URL: "https://example.com/deps"},
+			{Text: "groom changelog"},
+		},
+		CronExpr:  "0 9 * * *",
+		Timezone:  "UTC",
+		Enabled:   true,
+		NextRunAt: &past,
+	}
+	assert.NilError(t, s.CreateSchedule(ctx, nil, sched))
 
 	sc := New(Options{Store: s})
 	assert.NilError(t, sc.Tick(ctx))
 
 	// Exactly one task materialized in this org.
-	assert.Equal(t, orgTaskCount(t, s, org.OrgID), 1)
+	page, err := s.ListTasksPage(ctx, nil, store.ListTasksPageParams{OrgID: org.OrgID, PageSize: 100})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page.Items), 1)
 
 	// The schedule advanced: it points at the new task and its next fire is in the
 	// future, so it is no longer due.
@@ -127,13 +110,26 @@ func TestScheduler_Tick_SkipsMissedOccurrences(t *testing.T) {
 	// elapsed while the scheduler was "down".
 	before := time.Now()
 	missed := before.Add(-72 * time.Hour)
-	sched := createDueSchedule(t, s, org, "0 9 * * *", "UTC", missed)
+	sched := &model.Schedule{
+		OrgID:     org.OrgID,
+		CreatedBy: org.UserID,
+		Name:      "nightly",
+		Workspace: "w",
+		Runner:    "r",
+		CronExpr:  "0 9 * * *",
+		Timezone:  "UTC",
+		Enabled:   true,
+		NextRunAt: &missed,
+	}
+	assert.NilError(t, s.CreateSchedule(ctx, nil, sched))
 
 	sc := New(Options{Store: s})
 	assert.NilError(t, sc.Tick(ctx))
 
 	// The three missed occurrences collapse into a single fire.
-	assert.Equal(t, orgTaskCount(t, s, org.OrgID), 1)
+	page, err := s.ListTasksPage(ctx, nil, store.ListTasksPageParams{OrgID: org.OrgID, PageSize: 100})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page.Items), 1)
 
 	// next_run_at realigned to the first occurrence strictly after now, not to the
 	// occurrence after the stale next_run_at (which would still be in the past).
@@ -144,7 +140,9 @@ func TestScheduler_Tick_SkipsMissedOccurrences(t *testing.T) {
 
 	// A second immediate tick finds nothing due and creates no further task.
 	assert.NilError(t, sc.Tick(ctx))
-	assert.Equal(t, orgTaskCount(t, s, org.OrgID), 1)
+	page, err = s.ListTasksPage(ctx, nil, store.ListTasksPageParams{OrgID: org.OrgID, PageSize: 100})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page.Items), 1)
 }
 
 // TestScheduler_Tick_ConcurrentFiresOnce proves the FOR UPDATE SKIP LOCKED
@@ -162,7 +160,17 @@ func TestScheduler_Tick_ConcurrentFiresOnce(t *testing.T) {
 	ctx := t.Context()
 
 	past := time.Now().Add(-time.Hour)
-	createDueSchedule(t, s, org, "* * * * *", "UTC", past)
+	assert.NilError(t, s.CreateSchedule(ctx, nil, &model.Schedule{
+		OrgID:     org.OrgID,
+		CreatedBy: org.UserID,
+		Name:      "nightly",
+		Workspace: "w",
+		Runner:    "r",
+		CronExpr:  "* * * * *",
+		Timezone:  "UTC",
+		Enabled:   true,
+		NextRunAt: &past,
+	}))
 
 	sc := New(Options{Store: s})
 
@@ -181,7 +189,9 @@ func TestScheduler_Tick_ConcurrentFiresOnce(t *testing.T) {
 	}
 
 	// Exactly one task despite two concurrent ticks.
-	assert.Equal(t, orgTaskCount(t, s, org.OrgID), 1)
+	page, err := s.ListTasksPage(ctx, nil, store.ListTasksPageParams{OrgID: org.OrgID, PageSize: 100})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page.Items), 1)
 }
 
 // TestScheduler_Tick_DisablesInvalidSchedule covers the invalid-at-fire-time edge
@@ -201,7 +211,18 @@ func TestScheduler_Tick_DisablesInvalidSchedule(t *testing.T) {
 	ctx := t.Context()
 
 	past := time.Now().Add(-time.Hour)
-	sched := createDueSchedule(t, s, org, "0 9 * * *", "Nowhere/Bad", past)
+	sched := &model.Schedule{
+		OrgID:     org.OrgID,
+		CreatedBy: org.UserID,
+		Name:      "nightly",
+		Workspace: "w",
+		Runner:    "r",
+		CronExpr:  "0 9 * * *",
+		Timezone:  "Nowhere/Bad",
+		Enabled:   true,
+		NextRunAt: &past,
+	}
+	assert.NilError(t, s.CreateSchedule(ctx, nil, sched))
 
 	sc := New(Options{Store: s})
 	assert.NilError(t, sc.Tick(ctx))
@@ -217,7 +238,9 @@ func TestScheduler_Tick_DisablesInvalidSchedule(t *testing.T) {
 	// The row stays out of the due set on subsequent ticks: no further task, so
 	// the recorded last-run task is unchanged.
 	assert.NilError(t, sc.Tick(ctx))
-	assert.Equal(t, orgTaskCount(t, s, org.OrgID), 1)
+	page, err := s.ListTasksPage(ctx, nil, store.ListTasksPageParams{OrgID: org.OrgID, PageSize: 100})
+	assert.NilError(t, err)
+	assert.Equal(t, len(page.Items), 1)
 	got2, err := s.GetSchedule(ctx, nil, sched.ID, org.OrgID)
 	assert.NilError(t, err)
 	assert.Assert(t, got2.LastTaskID != nil)
