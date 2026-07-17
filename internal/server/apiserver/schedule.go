@@ -50,7 +50,7 @@ func (s *Server) CreateSchedule(ctx context.Context, req *xagentv1.CreateSchedul
 		Workspace:    req.Workspace,
 		Runner:       req.Runner,
 		Namespace:    req.Namespace,
-		Instructions: instructionsFromProto(req.Instructions),
+		Instructions: model.ScheduleInstructionsFromProto(req.Instructions),
 		CronExpr:     req.CronExpr,
 		Timezone:     cmp.Or(req.Timezone, "UTC"),
 		Enabled:      req.Enabled,
@@ -153,7 +153,7 @@ func (s *Server) UpdateSchedule(ctx context.Context, req *xagentv1.UpdateSchedul
 		existing.Workspace = req.Workspace
 		existing.Runner = req.Runner
 		existing.Namespace = req.Namespace
-		existing.Instructions = instructionsFromProto(req.Instructions)
+		existing.Instructions = model.ScheduleInstructionsFromProto(req.Instructions)
 		existing.CronExpr = req.CronExpr
 		existing.Timezone = timezone
 		existing.AutoArchive = req.AutoArchive.AsDuration()
@@ -277,14 +277,4 @@ func (s *Server) SetScheduleEnabled(ctx context.Context, req *xagentv1.SetSchedu
 		Time:      time.Now(),
 	})
 	return &xagentv1.SetScheduleEnabledResponse{Schedule: sched.Proto()}, nil
-}
-
-// instructionsFromProto converts the request's instruction messages to the
-// schedule's template DTOs (the [{text, url}] JSONB shape).
-func instructionsFromProto(instructions []*xagentv1.Instruction) []model.ScheduleInstruction {
-	out := make([]model.ScheduleInstruction, len(instructions))
-	for i, inst := range instructions {
-		out[i] = model.ScheduleInstruction{Text: inst.Text, URL: inst.Url}
-	}
-	return out
 }
