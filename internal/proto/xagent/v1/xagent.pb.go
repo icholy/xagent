@@ -6456,8 +6456,8 @@ type CreateScheduleRequest struct {
 	Namespace     string                 `protobuf:"bytes,4,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	Instructions  []*Instruction         `protobuf:"bytes,5,rep,name=instructions,proto3" json:"instructions,omitempty"`
 	CronExpr      string                 `protobuf:"bytes,6,opt,name=cron_expr,json=cronExpr,proto3" json:"cron_expr,omitempty"`
-	Timezone      string                 `protobuf:"bytes,7,opt,name=timezone,proto3" json:"timezone,omitempty"`      // IANA name; empty defaults to "UTC"
-	Enabled       *bool                  `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"` // presence-tracked so an omitted value defaults to true
+	Timezone      string                 `protobuf:"bytes,7,opt,name=timezone,proto3" json:"timezone,omitempty"` // IANA name; empty defaults to "UTC"
+	Enabled       bool                   `protobuf:"varint,8,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	AutoArchive   *durationpb.Duration   `protobuf:"bytes,9,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -6543,8 +6543,8 @@ func (x *CreateScheduleRequest) GetTimezone() string {
 }
 
 func (x *CreateScheduleRequest) GetEnabled() bool {
-	if x != nil && x.Enabled != nil {
-		return *x.Enabled
+	if x != nil {
+		return x.Enabled
 	}
 	return false
 }
@@ -7516,7 +7516,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xdd\x02\n" +
+	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xcc\x02\n" +
 	"\x15CreateScheduleRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
@@ -7524,11 +7524,9 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\tnamespace\x18\x04 \x01(\tR\tnamespace\x12:\n" +
 	"\finstructions\x18\x05 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x1b\n" +
 	"\tcron_expr\x18\x06 \x01(\tR\bcronExpr\x12\x1a\n" +
-	"\btimezone\x18\a \x01(\tR\btimezone\x12\x1d\n" +
-	"\aenabled\x18\b \x01(\bH\x00R\aenabled\x88\x01\x01\x12<\n" +
-	"\fauto_archive\x18\t \x01(\v2\x19.google.protobuf.DurationR\vautoArchiveB\n" +
-	"\n" +
-	"\b_enabled\"I\n" +
+	"\btimezone\x18\a \x01(\tR\btimezone\x12\x18\n" +
+	"\aenabled\x18\b \x01(\bR\aenabled\x12<\n" +
+	"\fauto_archive\x18\t \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\"I\n" +
 	"\x16CreateScheduleResponse\x12/\n" +
 	"\bschedule\x18\x01 \x01(\v2\x13.xagent.v1.ScheduleR\bschedule\"$\n" +
 	"\x12GetScheduleRequest\x12\x0e\n" +
@@ -7996,7 +7994,6 @@ func file_xagent_v1_xagent_proto_init() {
 		(*Event_Lifecycle)(nil),
 		(*Event_Link)(nil),
 	}
-	file_xagent_v1_xagent_proto_msgTypes[114].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

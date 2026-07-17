@@ -43,12 +43,6 @@ func (s *Server) CreateSchedule(ctx context.Context, req *xagentv1.CreateSchedul
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("workspace %q not found on runner %q", req.Workspace, req.Runner))
 	}
-	// enabled is presence-tracked (optional bool) so an omitted value defaults to
-	// true — a freshly created schedule is active unless the caller opts out.
-	enabled := true
-	if req.Enabled != nil {
-		enabled = *req.Enabled
-	}
 	sched := &model.Schedule{
 		OrgID:        caller.OrgID,
 		CreatedBy:    caller.ID,
@@ -59,7 +53,7 @@ func (s *Server) CreateSchedule(ctx context.Context, req *xagentv1.CreateSchedul
 		Instructions: instructionsFromProto(req.Instructions),
 		CronExpr:     req.CronExpr,
 		Timezone:     cmp.Or(req.Timezone, "UTC"),
-		Enabled:      enabled,
+		Enabled:      req.Enabled,
 	}
 	if req.AutoArchive != nil {
 		sched.AutoArchive = req.AutoArchive.AsDuration()
