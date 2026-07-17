@@ -135,22 +135,25 @@ type Actor struct {
 	Name string `json:"name,omitempty"`
 }
 
-// Actor kinds. user actions carry a Name; the server-internal runner/router
-// actors do not.
+// Actor kinds. user actions carry a Name; the server-internal
+// runner/router/schedule actors do not.
 const (
-	ActorKindUser   = "user"
-	ActorKindRunner = "runner"
-	ActorKindRouter = "router"
+	ActorKindUser     = "user"
+	ActorKindRunner   = "runner"
+	ActorKindRouter   = "router"
+	ActorKindSchedule = "schedule"
 )
 
 // UserActor returns a user Actor with the given display name.
 func UserActor(name string) Actor { return Actor{Kind: ActorKindUser, Name: name} }
 
-// RunnerActor and RouterActor are the server-internal actors for container
-// lifecycle transitions and routing-rule-created tasks respectively.
+// RunnerActor, RouterActor, and ScheduleActor are the server-internal actors for
+// container lifecycle transitions, routing-rule-created tasks, and
+// scheduler-fired tasks respectively.
 var (
-	RunnerActor = Actor{Kind: ActorKindRunner}
-	RouterActor = Actor{Kind: ActorKindRouter}
+	RunnerActor   = Actor{Kind: ActorKindRunner}
+	RouterActor   = Actor{Kind: ActorKindRouter}
+	ScheduleActor = Actor{Kind: ActorKindSchedule}
 )
 
 // Proto converts an Actor to its protobuf representation.
