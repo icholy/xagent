@@ -119,42 +119,43 @@ func TestScheduleTaskAndEvents(t *testing.T) {
 	}
 
 	task := sched.Task()
-	assert.Equal(t, task.Name, "nightly")
-	assert.Equal(t, task.Runner, "r")
-	assert.Equal(t, task.Workspace, "w")
-	assert.Equal(t, task.Namespace, "ns")
-	assert.Equal(t, task.OrgID, int64(7))
-	assert.Equal(t, task.AutoArchive, time.Hour)
-	assert.Equal(t, task.Status, model.TaskStatusPending)
-	assert.Equal(t, task.Command, model.TaskCommandStart)
-	assert.Equal(t, task.Version, int64(1))
+	assert.DeepEqual(t, task, &model.Task{
+		Name:        "nightly",
+		Runner:      "r",
+		Workspace:   "w",
+		Namespace:   "ns",
+		Status:      model.TaskStatusPending,
+		Command:     model.TaskCommandStart,
+		Version:     1,
+		OrgID:       7,
+		AutoArchive: time.Hour,
+	})
 
 	// Events reference the inserted task; simulate the id the store would assign.
 	task.ID = 42
-	events := sched.Events(task)
-	assert.Equal(t, len(events), 3)
-
-	created, ok := events[0].Payload.(*model.LifecyclePayload)
-	assert.Assert(t, ok, "first event must be a lifecycle event")
-	assert.Equal(t, created.Kind, model.LifecycleKindCreated)
-	assert.Equal(t, created.Actor, model.ScheduleActor)
-	assert.Equal(t, created.ToStatus, task.Status.Label())
-	assert.Equal(t, events[0].TaskID, int64(42))
-	assert.Equal(t, events[0].OrgID, int64(7))
-	assert.Assert(t, !events[0].Wake, "the created event does not wake")
-
-	inst1, ok := events[1].Payload.(*model.InstructionPayload)
-	assert.Assert(t, ok, "second event must be an instruction event")
-	assert.Equal(t, inst1.Text, "bump deps")
-	assert.Equal(t, inst1.URL, "https://example.com/deps")
-	assert.Assert(t, events[1].Wake, "instruction events must wake")
-	assert.Equal(t, events[1].TaskID, int64(42))
-	assert.Equal(t, events[1].OrgID, int64(7))
-
-	inst2, ok := events[2].Payload.(*model.InstructionPayload)
-	assert.Assert(t, ok, "third event must be an instruction event")
-	assert.Equal(t, inst2.Text, "groom changelog")
-	assert.Equal(t, inst2.URL, "")
+	assert.DeepEqual(t, sched.Events(task), []*model.Event{
+		{
+			TaskID: 42,
+			OrgID:  7,
+			Payload: &model.LifecyclePayload{
+				Kind:     model.LifecycleKindCreated,
+				Actor:    model.ScheduleActor,
+				ToStatus: model.TaskStatusPending.Label(),
+			},
+		},
+		{
+			TaskID:  42,
+			OrgID:   7,
+			Wake:    true,
+			Payload: &model.InstructionPayload{Text: "bump deps", URL: "https://example.com/deps"},
+		},
+		{
+			TaskID:  42,
+			OrgID:   7,
+			Wake:    true,
+			Payload: &model.InstructionPayload{Text: "groom changelog"},
+		},
+	})
 }
 
 func TestScheduleValidate(t *testing.T) {
