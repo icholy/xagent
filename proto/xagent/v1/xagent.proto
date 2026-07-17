@@ -51,6 +51,12 @@ service XAgentService {
   rpc GetEventTypes(GetEventTypesRequest) returns (GetEventTypesResponse);
   rpc TestEvent(TestEventRequest) returns (TestEventResponse);
   rpc CreateGitHubToken(CreateGitHubTokenRequest) returns (CreateGitHubTokenResponse);
+  rpc CreateSchedule(CreateScheduleRequest) returns (CreateScheduleResponse);
+  rpc GetSchedule(GetScheduleRequest) returns (GetScheduleResponse);
+  rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
+  rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
+  rpc DeleteSchedule(DeleteScheduleRequest) returns (DeleteScheduleResponse);
+  rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
 }
 
 message PingRequest {}
@@ -740,4 +746,93 @@ message CreateGitHubTokenRequest {}
 message CreateGitHubTokenResponse {
   string token = 1;
   google.protobuf.Timestamp expires_at = 2;
+}
+
+// Schedule is a stored task template plus a cron spec. A server-side scheduler
+// worker materializes a real task run on each occurrence (see
+// proposals/accepted/scheduled-tasks.md). A schedule belongs to an org, not a
+// user — created_by is attribution only and carries no permission semantics.
+message Schedule {
+  int64 id = 1;
+  string name = 2;
+  string workspace = 3;
+  string runner = 4;
+  string namespace = 5;
+  repeated Instruction instructions = 6;   // reuses the existing Instruction message
+  string cron_expr = 7;
+  string timezone = 8;                      // IANA name; default "UTC"
+  bool enabled = 9;
+  google.protobuf.Duration auto_archive = 10;
+  google.protobuf.Timestamp next_run_at = 11;  // unset when disabled/paused
+  google.protobuf.Timestamp last_run_at = 12;  // unset when never run
+  int64 last_task_id = 13;                  // 0 = never run
+  string created_by = 14;
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message CreateScheduleRequest {
+  string name = 1;
+  string workspace = 2;
+  string runner = 3;
+  string namespace = 4;
+  repeated Instruction instructions = 5;
+  string cron_expr = 6;
+  string timezone = 7;                      // IANA name; empty defaults to "UTC"
+  optional bool enabled = 8;                // presence-tracked so an omitted value defaults to true
+  google.protobuf.Duration auto_archive = 9;
+}
+
+message CreateScheduleResponse {
+  Schedule schedule = 1;
+}
+
+message GetScheduleRequest {
+  int64 id = 1;
+}
+
+message GetScheduleResponse {
+  Schedule schedule = 1;
+}
+
+message ListSchedulesRequest {}
+
+message ListSchedulesResponse {
+  repeated Schedule schedules = 1;
+}
+
+// UpdateScheduleRequest mirrors CreateTask/UpdateTask: id plus the mutable
+// template + spec fields. Changing cron_expr or timezone recomputes next_run_at
+// server-side. Enable/disable is a separate concern — see SetScheduleEnabled.
+message UpdateScheduleRequest {
+  int64 id = 1;
+  string name = 2;
+  string workspace = 3;
+  string runner = 4;
+  string namespace = 5;
+  repeated Instruction instructions = 6;
+  string cron_expr = 7;
+  string timezone = 8;                      // IANA name; empty defaults to "UTC"
+  google.protobuf.Duration auto_archive = 9;
+}
+
+message UpdateScheduleResponse {
+  Schedule schedule = 1;
+}
+
+message DeleteScheduleRequest {
+  int64 id = 1;
+}
+
+message DeleteScheduleResponse {}
+
+// SetScheduleEnabledRequest toggles a schedule: enabling recomputes next_run_at
+// from now; disabling sets next_run_at = NULL so the claim query skips it.
+message SetScheduleEnabledRequest {
+  int64 id = 1;
+  bool enabled = 2;
+}
+
+message SetScheduleEnabledResponse {
+  Schedule schedule = 1;
 }

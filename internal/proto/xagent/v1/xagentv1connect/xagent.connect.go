@@ -149,6 +149,24 @@ const (
 	// XAgentServiceCreateGitHubTokenProcedure is the fully-qualified name of the XAgentService's
 	// CreateGitHubToken RPC.
 	XAgentServiceCreateGitHubTokenProcedure = "/xagent.v1.XAgentService/CreateGitHubToken"
+	// XAgentServiceCreateScheduleProcedure is the fully-qualified name of the XAgentService's
+	// CreateSchedule RPC.
+	XAgentServiceCreateScheduleProcedure = "/xagent.v1.XAgentService/CreateSchedule"
+	// XAgentServiceGetScheduleProcedure is the fully-qualified name of the XAgentService's GetSchedule
+	// RPC.
+	XAgentServiceGetScheduleProcedure = "/xagent.v1.XAgentService/GetSchedule"
+	// XAgentServiceListSchedulesProcedure is the fully-qualified name of the XAgentService's
+	// ListSchedules RPC.
+	XAgentServiceListSchedulesProcedure = "/xagent.v1.XAgentService/ListSchedules"
+	// XAgentServiceUpdateScheduleProcedure is the fully-qualified name of the XAgentService's
+	// UpdateSchedule RPC.
+	XAgentServiceUpdateScheduleProcedure = "/xagent.v1.XAgentService/UpdateSchedule"
+	// XAgentServiceDeleteScheduleProcedure is the fully-qualified name of the XAgentService's
+	// DeleteSchedule RPC.
+	XAgentServiceDeleteScheduleProcedure = "/xagent.v1.XAgentService/DeleteSchedule"
+	// XAgentServiceSetScheduleEnabledProcedure is the fully-qualified name of the XAgentService's
+	// SetScheduleEnabled RPC.
+	XAgentServiceSetScheduleEnabledProcedure = "/xagent.v1.XAgentService/SetScheduleEnabled"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -196,6 +214,12 @@ type XAgentServiceClient interface {
 	GetEventTypes(context.Context, *v1.GetEventTypesRequest) (*v1.GetEventTypesResponse, error)
 	TestEvent(context.Context, *v1.TestEventRequest) (*v1.TestEventResponse, error)
 	CreateGitHubToken(context.Context, *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error)
+	CreateSchedule(context.Context, *v1.CreateScheduleRequest) (*v1.CreateScheduleResponse, error)
+	GetSchedule(context.Context, *v1.GetScheduleRequest) (*v1.GetScheduleResponse, error)
+	ListSchedules(context.Context, *v1.ListSchedulesRequest) (*v1.ListSchedulesResponse, error)
+	UpdateSchedule(context.Context, *v1.UpdateScheduleRequest) (*v1.UpdateScheduleResponse, error)
+	DeleteSchedule(context.Context, *v1.DeleteScheduleRequest) (*v1.DeleteScheduleResponse, error)
+	SetScheduleEnabled(context.Context, *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -467,6 +491,42 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("CreateGitHubToken")),
 			connect.WithClientOptions(opts...),
 		),
+		createSchedule: connect.NewClient[v1.CreateScheduleRequest, v1.CreateScheduleResponse](
+			httpClient,
+			baseURL+XAgentServiceCreateScheduleProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("CreateSchedule")),
+			connect.WithClientOptions(opts...),
+		),
+		getSchedule: connect.NewClient[v1.GetScheduleRequest, v1.GetScheduleResponse](
+			httpClient,
+			baseURL+XAgentServiceGetScheduleProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("GetSchedule")),
+			connect.WithClientOptions(opts...),
+		),
+		listSchedules: connect.NewClient[v1.ListSchedulesRequest, v1.ListSchedulesResponse](
+			httpClient,
+			baseURL+XAgentServiceListSchedulesProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("ListSchedules")),
+			connect.WithClientOptions(opts...),
+		),
+		updateSchedule: connect.NewClient[v1.UpdateScheduleRequest, v1.UpdateScheduleResponse](
+			httpClient,
+			baseURL+XAgentServiceUpdateScheduleProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("UpdateSchedule")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSchedule: connect.NewClient[v1.DeleteScheduleRequest, v1.DeleteScheduleResponse](
+			httpClient,
+			baseURL+XAgentServiceDeleteScheduleProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("DeleteSchedule")),
+			connect.WithClientOptions(opts...),
+		),
+		setScheduleEnabled: connect.NewClient[v1.SetScheduleEnabledRequest, v1.SetScheduleEnabledResponse](
+			httpClient,
+			baseURL+XAgentServiceSetScheduleEnabledProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("SetScheduleEnabled")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -515,6 +575,12 @@ type xAgentServiceClient struct {
 	getEventTypes                  *connect.Client[v1.GetEventTypesRequest, v1.GetEventTypesResponse]
 	testEvent                      *connect.Client[v1.TestEventRequest, v1.TestEventResponse]
 	createGitHubToken              *connect.Client[v1.CreateGitHubTokenRequest, v1.CreateGitHubTokenResponse]
+	createSchedule                 *connect.Client[v1.CreateScheduleRequest, v1.CreateScheduleResponse]
+	getSchedule                    *connect.Client[v1.GetScheduleRequest, v1.GetScheduleResponse]
+	listSchedules                  *connect.Client[v1.ListSchedulesRequest, v1.ListSchedulesResponse]
+	updateSchedule                 *connect.Client[v1.UpdateScheduleRequest, v1.UpdateScheduleResponse]
+	deleteSchedule                 *connect.Client[v1.DeleteScheduleRequest, v1.DeleteScheduleResponse]
+	setScheduleEnabled             *connect.Client[v1.SetScheduleEnabledRequest, v1.SetScheduleEnabledResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -904,6 +970,60 @@ func (c *xAgentServiceClient) CreateGitHubToken(ctx context.Context, req *v1.Cre
 	return nil, err
 }
 
+// CreateSchedule calls xagent.v1.XAgentService.CreateSchedule.
+func (c *xAgentServiceClient) CreateSchedule(ctx context.Context, req *v1.CreateScheduleRequest) (*v1.CreateScheduleResponse, error) {
+	response, err := c.createSchedule.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// GetSchedule calls xagent.v1.XAgentService.GetSchedule.
+func (c *xAgentServiceClient) GetSchedule(ctx context.Context, req *v1.GetScheduleRequest) (*v1.GetScheduleResponse, error) {
+	response, err := c.getSchedule.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// ListSchedules calls xagent.v1.XAgentService.ListSchedules.
+func (c *xAgentServiceClient) ListSchedules(ctx context.Context, req *v1.ListSchedulesRequest) (*v1.ListSchedulesResponse, error) {
+	response, err := c.listSchedules.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// UpdateSchedule calls xagent.v1.XAgentService.UpdateSchedule.
+func (c *xAgentServiceClient) UpdateSchedule(ctx context.Context, req *v1.UpdateScheduleRequest) (*v1.UpdateScheduleResponse, error) {
+	response, err := c.updateSchedule.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// DeleteSchedule calls xagent.v1.XAgentService.DeleteSchedule.
+func (c *xAgentServiceClient) DeleteSchedule(ctx context.Context, req *v1.DeleteScheduleRequest) (*v1.DeleteScheduleResponse, error) {
+	response, err := c.deleteSchedule.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
+// SetScheduleEnabled calls xagent.v1.XAgentService.SetScheduleEnabled.
+func (c *xAgentServiceClient) SetScheduleEnabled(ctx context.Context, req *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error) {
+	response, err := c.setScheduleEnabled.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -949,6 +1069,12 @@ type XAgentServiceHandler interface {
 	GetEventTypes(context.Context, *v1.GetEventTypesRequest) (*v1.GetEventTypesResponse, error)
 	TestEvent(context.Context, *v1.TestEventRequest) (*v1.TestEventResponse, error)
 	CreateGitHubToken(context.Context, *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error)
+	CreateSchedule(context.Context, *v1.CreateScheduleRequest) (*v1.CreateScheduleResponse, error)
+	GetSchedule(context.Context, *v1.GetScheduleRequest) (*v1.GetScheduleResponse, error)
+	ListSchedules(context.Context, *v1.ListSchedulesRequest) (*v1.ListSchedulesResponse, error)
+	UpdateSchedule(context.Context, *v1.UpdateScheduleRequest) (*v1.UpdateScheduleResponse, error)
+	DeleteSchedule(context.Context, *v1.DeleteScheduleRequest) (*v1.DeleteScheduleResponse, error)
+	SetScheduleEnabled(context.Context, *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1216,6 +1342,42 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("CreateGitHubToken")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceCreateScheduleHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceCreateScheduleProcedure,
+		svc.CreateSchedule,
+		connect.WithSchema(xAgentServiceMethods.ByName("CreateSchedule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceGetScheduleHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceGetScheduleProcedure,
+		svc.GetSchedule,
+		connect.WithSchema(xAgentServiceMethods.ByName("GetSchedule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceListSchedulesHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceListSchedulesProcedure,
+		svc.ListSchedules,
+		connect.WithSchema(xAgentServiceMethods.ByName("ListSchedules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceUpdateScheduleHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceUpdateScheduleProcedure,
+		svc.UpdateSchedule,
+		connect.WithSchema(xAgentServiceMethods.ByName("UpdateSchedule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceDeleteScheduleHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceDeleteScheduleProcedure,
+		svc.DeleteSchedule,
+		connect.WithSchema(xAgentServiceMethods.ByName("DeleteSchedule")),
+		connect.WithHandlerOptions(opts...),
+	)
+	xAgentServiceSetScheduleEnabledHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceSetScheduleEnabledProcedure,
+		svc.SetScheduleEnabled,
+		connect.WithSchema(xAgentServiceMethods.ByName("SetScheduleEnabled")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1304,6 +1466,18 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceTestEventHandler.ServeHTTP(w, r)
 		case XAgentServiceCreateGitHubTokenProcedure:
 			xAgentServiceCreateGitHubTokenHandler.ServeHTTP(w, r)
+		case XAgentServiceCreateScheduleProcedure:
+			xAgentServiceCreateScheduleHandler.ServeHTTP(w, r)
+		case XAgentServiceGetScheduleProcedure:
+			xAgentServiceGetScheduleHandler.ServeHTTP(w, r)
+		case XAgentServiceListSchedulesProcedure:
+			xAgentServiceListSchedulesHandler.ServeHTTP(w, r)
+		case XAgentServiceUpdateScheduleProcedure:
+			xAgentServiceUpdateScheduleHandler.ServeHTTP(w, r)
+		case XAgentServiceDeleteScheduleProcedure:
+			xAgentServiceDeleteScheduleHandler.ServeHTTP(w, r)
+		case XAgentServiceSetScheduleEnabledProcedure:
+			xAgentServiceSetScheduleEnabledHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1483,4 +1657,28 @@ func (UnimplementedXAgentServiceHandler) TestEvent(context.Context, *v1.TestEven
 
 func (UnimplementedXAgentServiceHandler) CreateGitHubToken(context.Context, *v1.CreateGitHubTokenRequest) (*v1.CreateGitHubTokenResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateGitHubToken is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) CreateSchedule(context.Context, *v1.CreateScheduleRequest) (*v1.CreateScheduleResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.CreateSchedule is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) GetSchedule(context.Context, *v1.GetScheduleRequest) (*v1.GetScheduleResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.GetSchedule is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) ListSchedules(context.Context, *v1.ListSchedulesRequest) (*v1.ListSchedulesResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.ListSchedules is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) UpdateSchedule(context.Context, *v1.UpdateScheduleRequest) (*v1.UpdateScheduleResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.UpdateSchedule is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) DeleteSchedule(context.Context, *v1.DeleteScheduleRequest) (*v1.DeleteScheduleResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.DeleteSchedule is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) SetScheduleEnabled(context.Context, *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SetScheduleEnabled is not implemented"))
 }
