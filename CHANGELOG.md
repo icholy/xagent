@@ -1,5 +1,45 @@
 # Changelog
 
+## [2.15.0](https://github.com/icholy/xagent/compare/v2.14.1...v2.15.0) (2026-07-17)
+
+
+### Features
+
+* **scheduler:** add scheduler worker that fires due schedules ([c176a18](https://github.com/icholy/xagent/commit/c176a181d561c9cdd71f75f6072b18e6054885b1))
+* **server:** add schedule proto and RPC handlers ([073f573](https://github.com/icholy/xagent/commit/073f5738dc39458a607e70cc9d7156925e9ba3bd))
+* **store:** add schedule model and store layer ([c1f1fdf](https://github.com/icholy/xagent/commit/c1f1fdf2417cdc648553e979a7c3bd4767981176))
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([1aff12b](https://github.com/icholy/xagent/commit/1aff12ba178870aa0c2a1c423c08790fdfb0eb4d))
+* **server:** gate schedule delete/enable on task-write ([5eeb953](https://github.com/icholy/xagent/commit/5eeb9532a75efca86ec4ffe641f0286884316533))
+* **webui:** reposition task sidebar status and toggle button ([31e413d](https://github.com/icholy/xagent/commit/31e413d54f8b39e3aca2cce03626898666799e11))
+
+
+### Miscellaneous
+
+* **deps:** update dependency lucide-react to v1.24.0 ([2af465c](https://github.com/icholy/xagent/commit/2af465c1ac5c603ab45a3f536fe5ffbb965d63c3))
+* **deps:** update dependency vite to v8.1.4 ([1f6f61a](https://github.com/icholy/xagent/commit/1f6f61af52807d279e961fd0abeafb91ef04216c))
+* **model:** assert Schedule.Task/Events with DeepEqual ([7061e84](https://github.com/icholy/xagent/commit/7061e84eb0826e05fd1bebbdc089a0c43fd5493f))
+* **model:** move schedule instruction proto conversion into model ([dbf885a](https://github.com/icholy/xagent/commit/dbf885ac506e6107a0bb0b768237d165a5f1c61f))
+* **model:** rename Instruction to ScheduleInstruction ([612c46e](https://github.com/icholy/xagent/commit/612c46e90b5ef628782c00e95e0fc3b197d320a7))
+* **scheduler:** collapse fire's disable/advance into one if/else ([4c80955](https://github.com/icholy/xagent/commit/4c809556b581c418d07e99c1419d6bb5a9d5ee4f))
+* **scheduler:** drive the tick tests through a moq'd Store ([246ee63](https://github.com/icholy/xagent/commit/246ee637d5b6bb9a929f9a58077747374ac4fecc))
+* **scheduler:** inline task seeding and drop invalid-fire report event ([d1f0a20](https://github.com/icholy/xagent/commit/d1f0a20e3adedf5086b8d5adc6b9aa82b1044f71))
+* **scheduler:** inline the tick test helpers at their call sites ([c435868](https://github.com/icholy/xagent/commit/c43586838dd28fc189a611a4db64e970ba4df322))
+* **scheduler:** move schedule task/event mapping onto the model ([a8566a1](https://github.com/icholy/xagent/commit/a8566a1d889af0eed59a0338e3b48558d16cad3e))
+* **scheduler:** use errgroup in the concurrent tick test ([1abbad9](https://github.com/icholy/xagent/commit/1abbad92d1659795118118cd122f72ee20a13f8b))
+* **scheduler:** use wg.Go in the concurrent tick test ([9925e1c](https://github.com/icholy/xagent/commit/9925e1c120af7e8e6f1fcd888044da4571e9ac81))
+* **schedules:** drop the unused version column ([fe69097](https://github.com/icholy/xagent/commit/fe69097a41e386657ab5e5f637e50aa787ec497b))
+* **server:** always recompute next_run_at on enabled update ([78fdebf](https://github.com/icholy/xagent/commit/78fdebf743b384334898b269e21a2536d2f85ef5))
+* **server:** clarify CreateSchedule enabled is explicit ([09c060e](https://github.com/icholy/xagent/commit/09c060efbc802fac125f312981f543b4a7d5acd7))
+* **server:** inline schedule change notifications ([8e69d34](https://github.com/icholy/xagent/commit/8e69d346c99867643bb9b3bff0192fca5ffa26b2))
+* **server:** use plain bool for CreateSchedule enabled ([f5142c6](https://github.com/icholy/xagent/commit/f5142c62b7135d6dc545f11f813732556c6a6769))
+* **store:** add schedules table migration ([3a48965](https://github.com/icholy/xagent/commit/3a48965d180c39e20f800e9a0e56135211657dcd))
+* **store:** group AdvanceSchedule params into a struct ([9993943](https://github.com/icholy/xagent/commit/99939433279b7f05b0883bfcf78b8defd77d4a51))
+* **store:** use BIGSERIAL for schedules.id ([ee713b7](https://github.com/icholy/xagent/commit/ee713b7cb6a9381f5baf27e9f34d8a84bd253571))
+
 ## [2.14.1](https://github.com/icholy/xagent/compare/v2.14.0...v2.14.1) (2026-07-17)
 
 
