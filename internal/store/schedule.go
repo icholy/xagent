@@ -121,15 +121,25 @@ func (s *Store) ClaimDueSchedules(ctx context.Context, tx *sql.Tx, limit int) ([
 	return toModelSchedules(rows)
 }
 
+// ScheduleAdvance carries the bookkeeping a fire writes back to a schedule: the
+// recomputed next occurrence, the instant it just fired, and the task that fire
+// created. Grouping the two *time.Time and the *int64 into named fields keeps
+// callers from transposing them.
+type ScheduleAdvance struct {
+	NextRunAt  *time.Time
+	LastRunAt  *time.Time
+	LastTaskID *int64
+}
+
 // AdvanceSchedule records a fire: it sets next_run_at to the next occurrence,
 // last_run_at/last_task_id to the run just created, and bumps version. Called in
 // the same transaction as the fire so the advance and the task creation commit
 // together (exactly-once).
-func (s *Store) AdvanceSchedule(ctx context.Context, tx *sql.Tx, id int64, orgID int64, nextRunAt, lastRunAt *time.Time, lastTaskID *int64) error {
+func (s *Store) AdvanceSchedule(ctx context.Context, tx *sql.Tx, id int64, orgID int64, adv ScheduleAdvance) error {
 	return s.q(tx).AdvanceSchedule(ctx, sqlc.AdvanceScheduleParams{
-		NextRunAt:  nullTime(nextRunAt),
-		LastRunAt:  nullTime(lastRunAt),
-		LastTaskID: nullInt64(lastTaskID),
+		NextRunAt:  nullTime(adv.NextRunAt),
+		LastRunAt:  nullTime(adv.LastRunAt),
+		LastTaskID: nullInt64(adv.LastTaskID),
 		ID:         id,
 		OrgID:      orgID,
 	})
