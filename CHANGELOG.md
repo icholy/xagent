@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.14.1](https://github.com/icholy/xagent/compare/v2.14.0...v2.14.1) (2026-07-17)
+
+
+### Miscellaneous
+
+* **webui:** let task timeline fill the main pane width ([43f527e](https://github.com/icholy/xagent/commit/43f527e03363528822e010d41d7ed803a8859a6b))
+
 ## [2.14.0](https://github.com/icholy/xagent/compare/v2.13.1...v2.14.0) (2026-07-17)
 
 
