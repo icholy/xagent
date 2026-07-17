@@ -61,7 +61,6 @@ func TestScheduleCRUD(t *testing.T) {
 	sched.Enabled = false
 	sched.NextRunAt = nil
 	sched.Instructions = []model.ScheduleInstruction{{Text: "only this"}}
-	sched.Version = 1
 	assert.NilError(t, s.UpdateSchedule(ctx, nil, sched))
 
 	got, err = s.GetSchedule(ctx, nil, sched.ID, org.OrgID)
@@ -103,8 +102,7 @@ func TestAdvanceSchedule(t *testing.T) {
 	}
 	assert.NilError(t, s.CreateSchedule(ctx, nil, sched))
 
-	// Advancing records the fire: new next_run_at, last_run_at, last_task_id,
-	// and bumps version.
+	// Advancing records the fire: new next_run_at, last_run_at, last_task_id.
 	task := teststore.CreateTask(t, s, org, nil)
 	newNext := time.Date(2026, 7, 21, 13, 0, 0, 0, time.UTC)
 	firedAt := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
@@ -119,7 +117,6 @@ func TestAdvanceSchedule(t *testing.T) {
 	assert.DeepEqual(t, *got.NextRunAt, newNext)
 	assert.DeepEqual(t, *got.LastRunAt, firedAt)
 	assert.Equal(t, *got.LastTaskID, task.ID)
-	assert.Equal(t, got.Version, int64(1))
 }
 
 // TestClaimDueSchedules_Concurrent proves the FOR UPDATE SKIP LOCKED guarantee:

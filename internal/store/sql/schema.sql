@@ -136,7 +136,6 @@ CREATE TABLE public.schedules (
     next_run_at timestamp without time zone,
     last_run_at timestamp without time zone,
     last_task_id bigint,
-    version bigint DEFAULT 0 NOT NULL,
     created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL,
     updated_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL
 );
@@ -716,4 +715,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260712000001'),
     ('20260712000002'),
     ('20260712000003'),
-    ('20260718000001');
+    ('20260718000001'),
+    ('20260718000002');

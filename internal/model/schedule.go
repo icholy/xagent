@@ -57,7 +57,6 @@ type Schedule struct {
 	NextRunAt  *time.Time `json:"next_run_at,omitempty"` // UTC; nil when disabled/paused
 	LastRunAt  *time.Time `json:"last_run_at,omitempty"` // UTC
 	LastTaskID *int64     `json:"last_task_id,omitempty"`
-	Version    int64      `json:"version"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

@@ -170,7 +170,6 @@ func (s *Server) UpdateSchedule(ctx context.Context, req *xagentv1.UpdateSchedul
 			}
 			existing.NextRunAt = &next
 		}
-		existing.Version++
 		if err := s.store.UpdateSchedule(ctx, tx, existing); err != nil {
 			return err
 		}
@@ -251,7 +250,6 @@ func (s *Server) SetScheduleEnabled(ctx context.Context, req *xagentv1.SetSchedu
 			// Disabling drops it from the claim query.
 			existing.NextRunAt = nil
 		}
-		existing.Version++
 		if err := s.store.UpdateSchedule(ctx, tx, existing); err != nil {
 			return err
 		}

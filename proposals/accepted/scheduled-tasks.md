@@ -114,7 +114,6 @@ CREATE TABLE schedules (
     next_run_at  TIMESTAMP,                     -- next fire time (UTC); NULL when disabled/paused
     last_run_at  TIMESTAMP,                     -- last time we fired
     last_task_id BIGINT REFERENCES tasks(id) ON DELETE SET NULL,  -- most recent run, for the UI
-    version      BIGINT NOT NULL DEFAULT 0,     -- optimistic-concurrency guard, mirrors tasks.version
 
     created_at   TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
     updated_at   TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
@@ -153,8 +152,6 @@ Notes on choices, all following existing conventions:
 - **`next_run_at` is stored, not derived.** The scheduler advances it transactionally on every
   fire, so the due-scan is a cheap index range read. Computing "is it due" at query time would
   mean re-parsing cron for every row on every tick.
-- **`version`.** Mirrors `tasks.version` (`internal/model/task.go`) — an optimistic-concurrency
-  guard bumped on every mutation, used to make the claim/advance idempotent (§ scheduler).
 
 ### Model
 
@@ -181,7 +178,6 @@ type Schedule struct {
     NextRunAt   *time.Time      // UTC
     LastRunAt   *time.Time      // UTC
     LastTaskID  *int64
-    Version     int64
 
     CreatedAt   time.Time
     UpdatedAt   time.Time
@@ -216,7 +212,7 @@ New `internal/store/schedule.go` + `internal/store/sql/queries/schedule.sql`, mi
 -- point next_run_at has been advanced past now, so the row is no longer due.
 SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions,
        auto_archive, cron_expr, timezone, enabled,
-       next_run_at, last_run_at, last_task_id, version, created_at, updated_at
+       next_run_at, last_run_at, last_task_id, created_at, updated_at
 FROM schedules
 WHERE enabled = TRUE
   AND next_run_at IS NOT NULL
@@ -228,7 +224,7 @@ FOR UPDATE SKIP LOCKED;
 -- name: AdvanceSchedule :exec
 UPDATE schedules
 SET next_run_at = $1, last_run_at = $2, last_task_id = $3,
-    version = version + 1, updated_at = (NOW() AT TIME ZONE 'UTC')
+    updated_at = (NOW() AT TIME ZONE 'UTC')
 WHERE id = $4 AND org_id = $5;
 ```
 
@@ -241,8 +237,7 @@ considerations"). Schedules raise the stakes: firing mutates a *shared, monotoni
 not an idempotent no-op. `SKIP LOCKED` is the idiomatic Postgres primitive for exactly-once
 work-claiming and composes with the row-lock pattern (`GetTaskForUpdate`) the codebase already
 uses; it's the natural, minimal upgrade for work that genuinely must run on exactly one
-instance. The per-row `version` bump is retained as defense-in-depth and for the same
-concurrency-detection role it plays on tasks.
+instance.
 
 ### Scheduler worker
 
@@ -476,7 +471,7 @@ above it land.
 
 The proposed shape is the smallest thing that is *correct across instances* while staying
 maximally consistent with what already exists: the worker is the archiver, the fire is
-`CreateTask`, the tenancy is `org_id`, the concurrency guard is `version` — the only genuinely
+`CreateTask`, the tenancy is `org_id` — the only genuinely
 new primitive is `FOR UPDATE SKIP LOCKED`, chosen precisely because a schedule fire is a
 non-idempotent side effect that the archiver's optimistic check wasn't designed to protect.
 
