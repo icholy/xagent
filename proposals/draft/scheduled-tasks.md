@@ -110,8 +110,7 @@ CREATE TABLE schedules (
     timezone     TEXT   NOT NULL DEFAULT 'UTC',
     enabled      BOOLEAN NOT NULL DEFAULT TRUE,
 
-    -- Policy knobs (see edge cases).
-    catch_up     SMALLINT NOT NULL DEFAULT 0,   -- 0=skip (fast-forward), 1=backfill
+    -- Policy knob (see edge cases).
     overlap      SMALLINT NOT NULL DEFAULT 0,   -- 0=allow, 1=skip if last run not terminal
 
     -- Scheduler bookkeeping.
@@ -181,7 +180,6 @@ type Schedule struct {
     Timezone    string
     Enabled     bool
 
-    CatchUp     CatchUpPolicy   // CatchUpSkip | CatchUpBackfill
     Overlap     OverlapPolicy   // OverlapAllow | OverlapSkip
 
     NextRunAt   *time.Time      // UTC
@@ -221,7 +219,7 @@ New `internal/store/schedule.go` + `internal/store/sql/queries/schedule.sql`, mi
 -- the same schedule. The locks are held until the caller's transaction commits, by which
 -- point next_run_at has been advanced past now, so the row is no longer due.
 SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions,
-       auto_archive, cron_expr, timezone, enabled, catch_up, overlap,
+       auto_archive, cron_expr, timezone, enabled, overlap,
        next_run_at, last_run_at, last_task_id, version, created_at, updated_at
 FROM schedules
 WHERE enabled = TRUE
@@ -292,8 +290,8 @@ Each `Tick`:
       `UserActor`/`RunnerActor`) + one `InstructionPayload` event per instruction. `org_id` is
       the schedule's. This is an org-level worker action with no per-user permission check — the
       same way the archiver archives with `RunnerActor` (§ auth).
-   c. Compute the next fire time (§ catch-up) and call `AdvanceSchedule(next, firedAt,
-      newTaskID)`.
+   c. Compute the next fire time as the first occurrence strictly after `now`
+      (`s.Next(time.Now())`, § missed runs) and call `AdvanceSchedule(next, firedAt, newTaskID)`.
 3. Commit. Committing both releases the `SKIP LOCKED` locks *and* persists the advanced
    `next_run_at`, so the schedule is no longer due — a crash before commit simply rolls the
    whole tick back and the schedule stays due for the next tick (at-least-once claim, made
@@ -321,26 +319,20 @@ is completely independent of how long that task takes to run.
 
 ### Edge cases
 
-**Missed runs after downtime (backfill vs skip).** Controlled by `catch_up`:
+**Missed runs after downtime — always skip.** Missed occurrences are never backfilled. When a
+due schedule is claimed, the fire time is recomputed as the first occurrence strictly *after*
+`now` (`s.Next(time.Now())`), not after the stored `next_run_at`. All occurrences that elapsed
+while the scheduler (or the whole server) was down collapse into at most one fire, and the
+schedule simply realigns to the grid. A nightly job that missed three nights runs *once* on
+recovery, not three times. There is intentionally no backfill mode: replaying stale occurrences
+(a "summarize yesterday" run for three days ago) is rarely what anyone wants, and the extra
+policy surface, age-floor tuning, and per-tick draining it would require aren't worth it. If a
+user genuinely needs a missed run, they can trigger the task manually.
 
-- `CatchUpSkip` (default): compute the next occurrence strictly after `now`
-  (`s.Next(time.Now())`), not after the stored `next_run_at`. All occurrences that elapsed
-  during downtime collapse into at most one fire, and the schedule realigns to the grid. This
-  is the safe default — a nightly job that missed three nights runs *once* on recovery, not
-  three times.
-- `CatchUpBackfill`: fire the missed occurrences. To keep this bounded, the scheduler advances
-  a schedule by **one occurrence per claim** (fire for `next_run_at`, then set
-  `next_run_at = s.Next(next_run_at)`). A backlogged schedule stays due and is re-claimed on
-  subsequent ticks, draining one occurrence per tick per schedule. A hard cap
-  (`MaxBackfillPerSchedulePerTick = 1`, effectively enforced by claiming once) plus an absolute
-  age floor (don't backfill occurrences older than, say, 24h — configurable) prevents an
-  unbounded catch-up.
-
-**Catch-up storms.** The design bounds the blast radius structurally: each tick fires at most
-`batchSize` tasks total across all schedules, and at most one occurrence per schedule per tick.
-After downtime the recovery is spread across ticks (one occurrence/schedule/tick) rather than a
-single thundering insert. With the default `CatchUpSkip`, there is no storm at all — every
-schedule fires at most once regardless of how long the outage was.
+**Catch-up storms.** With skip-only semantics there is no catch-up storm to bound: every
+schedule fires at most once when it comes due, regardless of how long the outage was. The tick
+is still capped at `batchSize` tasks total (across *distinct* schedules) as ordinary
+back-pressure, but a single schedule can never enqueue a backlog.
 
 **Overlapping runs of the same schedule.** Controlled by `overlap`:
 
@@ -392,18 +384,16 @@ message Schedule {
   string cron_expr = 7;
   string timezone = 8;                      // IANA name; default "UTC"
   bool enabled = 9;
-  CatchUpPolicy catch_up = 10;
-  OverlapPolicy overlap = 11;
-  google.protobuf.Duration auto_archive = 12;
-  google.protobuf.Timestamp next_run_at = 13;
-  google.protobuf.Timestamp last_run_at = 14;
-  int64 last_task_id = 15;                  // 0 = never run
-  string created_by = 16;
-  google.protobuf.Timestamp created_at = 17;
-  google.protobuf.Timestamp updated_at = 18;
+  OverlapPolicy overlap = 10;
+  google.protobuf.Duration auto_archive = 11;
+  google.protobuf.Timestamp next_run_at = 12;
+  google.protobuf.Timestamp last_run_at = 13;
+  int64 last_task_id = 14;                  // 0 = never run
+  string created_by = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
 }
 
-enum CatchUpPolicy { CATCHUP_SKIP = 0; CATCHUP_BACKFILL = 1; }
 enum OverlapPolicy { OVERLAP_ALLOW = 0; OVERLAP_SKIP = 1; }
 
 message CreateScheduleRequest {
@@ -415,9 +405,8 @@ message CreateScheduleRequest {
   string cron_expr = 6;
   string timezone = 7;
   bool enabled = 8;                         // default true
-  CatchUpPolicy catch_up = 9;
-  OverlapPolicy overlap = 10;
-  google.protobuf.Duration auto_archive = 11;
+  OverlapPolicy overlap = 9;
+  google.protobuf.Duration auto_archive = 10;
 }
 // UpdateScheduleRequest mirrors CreateTask/UpdateTask: id + the mutable fields. Changing
 // cron_expr or timezone recomputes next_run_at server-side.
@@ -467,7 +456,7 @@ A new "Schedules" section in the v2 UI (`webui/`, TanStack Router/Query per the 
 a list view (name, cron, timezone, enabled toggle, next run, last run + status link to
 `last_task_id`), a create/edit form (workspace + runner pickers reused from the task-create
 form, a cron field with a human-readable "next 3 runs" preview computed from the parsed
-expression, timezone select, instructions, auto-archive presets, overlap/catch-up selects), and
+expression, timezone select, instructions, auto-archive presets, an overlap select), and
 an inline enable/disable switch calling `SetScheduleEnabled`. Run `pnpm lint` in `webui/`
 before finishing.
 
@@ -487,7 +476,7 @@ above it land.
    Verifiable by: `mise run up:test` applies the migration; `migrate:up`/`migrate:down`
    round-trip cleanly.
 2. **Model + store** — Delivers: `internal/model/schedule.go` (`Schedule`, `Next`, `Validate`,
-   `CatchUpPolicy`, `OverlapPolicy`, `ScheduleActor`), `schedule.sql` queries (incl.
+   `OverlapPolicy`, `ScheduleActor`), `schedule.sql` queries (incl.
    `ClaimDueSchedules` with `FOR UPDATE SKIP LOCKED` and `AdvanceSchedule`), and
    `internal/store/schedule.go`. Adds `github.com/robfig/cron/v3` to `go.mod`. Depends on: (1).
    Verifiable by: store unit tests against the test Postgres (`internal/store/schedule_test.go`)
@@ -500,8 +489,9 @@ above it land.
 4. **Scheduler worker** — Delivers: `internal/server/scheduler`, wired into
    `internal/command/server.go` with `--schedule-poll` / `--schedule-batch`. Depends on: (2),
    (3). Verifiable by: a `Tick`-driven test (like `archiver`'s) asserting a due schedule
-   produces exactly one task + the right events, advances `next_run_at`, honors overlap/catch-up
-   policies, and fires exactly once under two concurrent schedulers.
+   produces exactly one task + the right events, advances `next_run_at`, skips missed
+   occurrences after a simulated downtime, honors the overlap policy, and fires exactly once
+   under two concurrent schedulers.
 5. **CLI** — Delivers: `xagent schedule` subcommand. Depends on: (3). Verifiable by: running the
    commands end to end against a local server.
 6. **Web UI** — Delivers: the Schedules list + create/edit views. Depends on: (3). Verifiable
@@ -525,19 +515,13 @@ non-idempotent side effect that the archiver's optimistic check wasn't designed 
 
 ## Open Questions
 
-1. **Catch-up default.** Proposed `CatchUpSkip` (collapse missed occurrences into one). Is
-   there a class of schedule where users would expect every missed run to backfill by default?
-   The safe default is skip; backfill is opt-in per schedule.
-2. **Backfill age floor.** For `CatchUpBackfill`, what's the maximum age of a missed occurrence
-   worth firing? Proposed 24h, configurable. Firing a report for "three weeks ago" is rarely
-   useful.
-3. **Per-schedule concurrency vs global.** `OverlapSkip` prevents a schedule from overlapping
+1. **Per-schedule concurrency vs global.** `OverlapSkip` prevents a schedule from overlapping
    *itself*. Do we also need a per-workspace or per-runner concurrency cap for scheduled tasks
    so a burst of schedules can't swamp a runner? Likely a separate concern (runner-side
    admission control), noted so the schema doesn't need to carry it prematurely.
-4. **Timezone list source.** The UI timezone picker needs the IANA name list. Ship a static
+2. **Timezone list source.** The UI timezone picker needs the IANA name list. Ship a static
    bundled list, or expose a `ListTimezones` helper RPC derived from the server's tz database
    (so client and server agree on what `time.LoadLocation` will accept)?
-5. **Jitter.** Should we add optional per-schedule jitter (e.g. ±N seconds) so many `0 * * * *`
+3. **Jitter.** Should we add optional per-schedule jitter (e.g. ±N seconds) so many `0 * * * *`
    schedules don't all fire on the exact minute boundary and stampede a runner? Cheap to add to
    `Next`; deferred unless load shows it's needed.
