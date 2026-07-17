@@ -138,9 +138,9 @@ func (s *Store) AdvanceSchedule(ctx context.Context, tx *sql.Tx, id int64, orgID
 // marshalInstructions encodes the template instructions as the [{text, url}]
 // JSONB stored in schedules.instructions. A nil slice is stored as an empty JSON
 // array so the column never holds SQL NULL.
-func marshalInstructions(instructions []model.Instruction) (json.RawMessage, error) {
+func marshalInstructions(instructions []model.ScheduleInstruction) (json.RawMessage, error) {
 	if instructions == nil {
-		instructions = []model.Instruction{}
+		instructions = []model.ScheduleInstruction{}
 	}
 	data, err := json.Marshal(instructions)
 	if err != nil {
@@ -150,7 +150,7 @@ func marshalInstructions(instructions []model.Instruction) (json.RawMessage, err
 }
 
 func toModelSchedule(row sqlc.Schedule) (*model.Schedule, error) {
-	var instructions []model.Instruction
+	var instructions []model.ScheduleInstruction
 	if err := json.Unmarshal(row.Instructions, &instructions); err != nil {
 		return nil, fmt.Errorf("unmarshal schedule instructions: %w", err)
 	}

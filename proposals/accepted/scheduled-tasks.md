@@ -170,7 +170,7 @@ type Schedule struct {
     Workspace   string
     Runner      string
     Namespace   string
-    Instructions []Instruction   // {Text, URL}
+    Instructions []ScheduleInstruction   // {Text, URL}
     AutoArchive time.Duration
 
     CronExpr    string

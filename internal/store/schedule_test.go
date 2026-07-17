@@ -30,7 +30,7 @@ func TestScheduleCRUD(t *testing.T) {
 		Workspace: "w",
 		Runner:    "r",
 		Namespace: "ns",
-		Instructions: []model.Instruction{
+		Instructions: []model.ScheduleInstruction{
 			{Text: "bump deps", URL: "https://example.com/deps"},
 			{Text: "groom changelog"},
 		},
@@ -59,7 +59,7 @@ func TestScheduleCRUD(t *testing.T) {
 	sched.Timezone = "UTC"
 	sched.Enabled = false
 	sched.NextRunAt = nil
-	sched.Instructions = []model.Instruction{{Text: "only this"}}
+	sched.Instructions = []model.ScheduleInstruction{{Text: "only this"}}
 	sched.Version = 1
 	assert.NilError(t, s.UpdateSchedule(ctx, nil, sched))
 
