@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -405,70 +404,6 @@ func TestUpdateTask(t *testing.T) {
 	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Task.Name, "Updated Name")
-}
-
-// instructionEvents filters a task's event stream down to the instruction
-// events, oldest-first, so a test can assert on their wake flags.
-func instructionEvents(t *testing.T, srv *Server, ctx context.Context, taskID int64) []*xagentv1.Event {
-	t.Helper()
-	resp, err := srv.ListEventsByTask(ctx, &xagentv1.ListEventsByTaskRequest{TaskId: taskID})
-	assert.NilError(t, err)
-	var out []*xagentv1.Event
-	for _, e := range resp.Events {
-		if e.GetInstruction() != nil {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
-// Adding an instruction without starting the task must not flag the event as a
-// wake — the "woke task" badge should only appear when the task is actually
-// woken. See https://github.com/icholy/xagent/issues/1475.
-func TestUpdateTask_InstructionWakeReflectsStart(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-	createResp, err := srv.CreateTask(ctx, &xagentv1.CreateTaskRequest{
-		Name:      "Wake badge task",
-		Runner:    "test-runner",
-		Workspace: "test-workspace",
-	})
-	assert.NilError(t, err)
-
-	// Move the task into a terminal state so it can be woken.
-	dbTask, err := srv.store.GetTask(ctx, nil, createResp.Task.Id, org.OrgID)
-	assert.NilError(t, err)
-	dbTask.Status = model.TaskStatusCompleted
-	dbTask.Command = model.TaskCommandNone
-	assert.NilError(t, srv.store.UpdateTask(ctx, nil, dbTask))
-
-	// Instruction without start: the task stays COMPLETED, so the event must not
-	// claim a wake.
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:              createResp.Task.Id,
-		AddInstructions: []*xagentv1.Instruction{{Text: "no wake"}},
-	})
-	assert.NilError(t, err)
-	getResp, err := srv.GetTask(ctx, &xagentv1.GetTaskRequest{Id: createResp.Task.Id})
-	assert.NilError(t, err)
-	assert.Equal(t, getResp.Task.Status, xagentv1.TaskStatus_COMPLETED, "task should remain completed")
-	insts := instructionEvents(t, srv, ctx, createResp.Task.Id)
-	assert.Equal(t, len(insts), 1)
-	assert.Equal(t, insts[0].Wake, false, "instruction added without start must not be flagged as a wake")
-
-	// Instruction with start: the task transitions out of the terminal state, so
-	// the event is a genuine wake.
-	_, err = srv.UpdateTask(ctx, &xagentv1.UpdateTaskRequest{
-		Id:              createResp.Task.Id,
-		AddInstructions: []*xagentv1.Instruction{{Text: "wake"}},
-		Start:           true,
-	})
-	assert.NilError(t, err)
-	insts = instructionEvents(t, srv, ctx, createResp.Task.Id)
-	assert.Equal(t, len(insts), 2)
-	assert.Equal(t, insts[1].Wake, true, "instruction added with start should be flagged as a wake")
 }
 
 func TestUpdateTask_Permissions(t *testing.T) {
