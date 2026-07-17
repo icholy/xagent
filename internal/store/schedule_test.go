@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/icholy/xagent/internal/model"
+	"github.com/icholy/xagent/internal/store"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
@@ -107,7 +108,11 @@ func TestAdvanceSchedule(t *testing.T) {
 	task := teststore.CreateTask(t, s, org, nil)
 	newNext := time.Date(2026, 7, 21, 13, 0, 0, 0, time.UTC)
 	firedAt := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
-	assert.NilError(t, s.AdvanceSchedule(ctx, nil, sched.ID, org.OrgID, &newNext, &firedAt, &task.ID))
+	assert.NilError(t, s.AdvanceSchedule(ctx, nil, sched.ID, org.OrgID, store.ScheduleAdvance{
+		NextRunAt:  &newNext,
+		LastRunAt:  &firedAt,
+		LastTaskID: &task.ID,
+	}))
 
 	got, err := s.GetSchedule(ctx, nil, sched.ID, org.OrgID)
 	assert.NilError(t, err)
