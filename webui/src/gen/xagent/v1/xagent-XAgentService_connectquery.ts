@@ -218,3 +218,33 @@ export const testEvent = XAgentService.method.testEvent;
  * @generated from rpc xagent.v1.XAgentService.CreateGitHubToken
  */
 export const createGitHubToken = XAgentService.method.createGitHubToken;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.CreateSchedule
+ */
+export const createSchedule = XAgentService.method.createSchedule;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.GetSchedule
+ */
+export const getSchedule = XAgentService.method.getSchedule;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.ListSchedules
+ */
+export const listSchedules = XAgentService.method.listSchedules;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.UpdateSchedule
+ */
+export const updateSchedule = XAgentService.method.updateSchedule;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.DeleteSchedule
+ */
+export const deleteSchedule = XAgentService.method.deleteSchedule;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.SetScheduleEnabled
+ */
+export const setScheduleEnabled = XAgentService.method.setScheduleEnabled;

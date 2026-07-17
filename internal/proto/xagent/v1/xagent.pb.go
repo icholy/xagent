@@ -6280,6 +6280,827 @@ func (x *CreateGitHubTokenResponse) GetExpiresAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// Schedule is a stored task template plus a cron spec. A server-side scheduler
+// worker materializes a real task run on each occurrence (see
+// proposals/accepted/scheduled-tasks.md). A schedule belongs to an org, not a
+// user — created_by is attribution only and carries no permission semantics.
+type Schedule struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Workspace     string                 `protobuf:"bytes,3,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Runner        string                 `protobuf:"bytes,4,opt,name=runner,proto3" json:"runner,omitempty"`
+	Namespace     string                 `protobuf:"bytes,5,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Instructions  []*Instruction         `protobuf:"bytes,6,rep,name=instructions,proto3" json:"instructions,omitempty"` // reuses the existing Instruction message
+	CronExpr      string                 `protobuf:"bytes,7,opt,name=cron_expr,json=cronExpr,proto3" json:"cron_expr,omitempty"`
+	Timezone      string                 `protobuf:"bytes,8,opt,name=timezone,proto3" json:"timezone,omitempty"` // IANA name; default "UTC"
+	Enabled       bool                   `protobuf:"varint,9,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	AutoArchive   *durationpb.Duration   `protobuf:"bytes,10,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	NextRunAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=next_run_at,json=nextRunAt,proto3" json:"next_run_at,omitempty"`     // unset when disabled/paused
+	LastRunAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=last_run_at,json=lastRunAt,proto3" json:"last_run_at,omitempty"`     // unset when never run
+	LastTaskId    int64                  `protobuf:"varint,13,opt,name=last_task_id,json=lastTaskId,proto3" json:"last_task_id,omitempty"` // 0 = never run
+	CreatedBy     string                 `protobuf:"bytes,14,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Schedule) Reset() {
+	*x = Schedule{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Schedule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Schedule) ProtoMessage() {}
+
+func (x *Schedule) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Schedule.ProtoReflect.Descriptor instead.
+func (*Schedule) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *Schedule) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Schedule) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Schedule) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *Schedule) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
+func (x *Schedule) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *Schedule) GetInstructions() []*Instruction {
+	if x != nil {
+		return x.Instructions
+	}
+	return nil
+}
+
+func (x *Schedule) GetCronExpr() string {
+	if x != nil {
+		return x.CronExpr
+	}
+	return ""
+}
+
+func (x *Schedule) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *Schedule) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Schedule) GetAutoArchive() *durationpb.Duration {
+	if x != nil {
+		return x.AutoArchive
+	}
+	return nil
+}
+
+func (x *Schedule) GetNextRunAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NextRunAt
+	}
+	return nil
+}
+
+func (x *Schedule) GetLastRunAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastRunAt
+	}
+	return nil
+}
+
+func (x *Schedule) GetLastTaskId() int64 {
+	if x != nil {
+		return x.LastTaskId
+	}
+	return 0
+}
+
+func (x *Schedule) GetCreatedBy() string {
+	if x != nil {
+		return x.CreatedBy
+	}
+	return ""
+}
+
+func (x *Schedule) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *Schedule) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type CreateScheduleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Workspace     string                 `protobuf:"bytes,2,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Runner        string                 `protobuf:"bytes,3,opt,name=runner,proto3" json:"runner,omitempty"`
+	Namespace     string                 `protobuf:"bytes,4,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Instructions  []*Instruction         `protobuf:"bytes,5,rep,name=instructions,proto3" json:"instructions,omitempty"`
+	CronExpr      string                 `protobuf:"bytes,6,opt,name=cron_expr,json=cronExpr,proto3" json:"cron_expr,omitempty"`
+	Timezone      string                 `protobuf:"bytes,7,opt,name=timezone,proto3" json:"timezone,omitempty"`      // IANA name; empty defaults to "UTC"
+	Enabled       *bool                  `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"` // presence-tracked so an omitted value defaults to true
+	AutoArchive   *durationpb.Duration   `protobuf:"bytes,9,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateScheduleRequest) Reset() {
+	*x = CreateScheduleRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateScheduleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateScheduleRequest) ProtoMessage() {}
+
+func (x *CreateScheduleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateScheduleRequest.ProtoReflect.Descriptor instead.
+func (*CreateScheduleRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *CreateScheduleRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetInstructions() []*Instruction {
+	if x != nil {
+		return x.Instructions
+	}
+	return nil
+}
+
+func (x *CreateScheduleRequest) GetCronExpr() string {
+	if x != nil {
+		return x.CronExpr
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *CreateScheduleRequest) GetEnabled() bool {
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
+	}
+	return false
+}
+
+func (x *CreateScheduleRequest) GetAutoArchive() *durationpb.Duration {
+	if x != nil {
+		return x.AutoArchive
+	}
+	return nil
+}
+
+type CreateScheduleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schedule      *Schedule              `protobuf:"bytes,1,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateScheduleResponse) Reset() {
+	*x = CreateScheduleResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateScheduleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateScheduleResponse) ProtoMessage() {}
+
+func (x *CreateScheduleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateScheduleResponse.ProtoReflect.Descriptor instead.
+func (*CreateScheduleResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *CreateScheduleResponse) GetSchedule() *Schedule {
+	if x != nil {
+		return x.Schedule
+	}
+	return nil
+}
+
+type GetScheduleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetScheduleRequest) Reset() {
+	*x = GetScheduleRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetScheduleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetScheduleRequest) ProtoMessage() {}
+
+func (x *GetScheduleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetScheduleRequest.ProtoReflect.Descriptor instead.
+func (*GetScheduleRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *GetScheduleRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type GetScheduleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schedule      *Schedule              `protobuf:"bytes,1,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetScheduleResponse) Reset() {
+	*x = GetScheduleResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetScheduleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetScheduleResponse) ProtoMessage() {}
+
+func (x *GetScheduleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetScheduleResponse.ProtoReflect.Descriptor instead.
+func (*GetScheduleResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *GetScheduleResponse) GetSchedule() *Schedule {
+	if x != nil {
+		return x.Schedule
+	}
+	return nil
+}
+
+type ListSchedulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSchedulesRequest) Reset() {
+	*x = ListSchedulesRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSchedulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSchedulesRequest) ProtoMessage() {}
+
+func (x *ListSchedulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSchedulesRequest.ProtoReflect.Descriptor instead.
+func (*ListSchedulesRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{118}
+}
+
+type ListSchedulesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schedules     []*Schedule            `protobuf:"bytes,1,rep,name=schedules,proto3" json:"schedules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSchedulesResponse) Reset() {
+	*x = ListSchedulesResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSchedulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSchedulesResponse) ProtoMessage() {}
+
+func (x *ListSchedulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSchedulesResponse.ProtoReflect.Descriptor instead.
+func (*ListSchedulesResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *ListSchedulesResponse) GetSchedules() []*Schedule {
+	if x != nil {
+		return x.Schedules
+	}
+	return nil
+}
+
+// UpdateScheduleRequest mirrors CreateTask/UpdateTask: id plus the mutable
+// template + spec fields. Changing cron_expr or timezone recomputes next_run_at
+// server-side. Enable/disable is a separate concern — see SetScheduleEnabled.
+type UpdateScheduleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Workspace     string                 `protobuf:"bytes,3,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	Runner        string                 `protobuf:"bytes,4,opt,name=runner,proto3" json:"runner,omitempty"`
+	Namespace     string                 `protobuf:"bytes,5,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Instructions  []*Instruction         `protobuf:"bytes,6,rep,name=instructions,proto3" json:"instructions,omitempty"`
+	CronExpr      string                 `protobuf:"bytes,7,opt,name=cron_expr,json=cronExpr,proto3" json:"cron_expr,omitempty"`
+	Timezone      string                 `protobuf:"bytes,8,opt,name=timezone,proto3" json:"timezone,omitempty"` // IANA name; empty defaults to "UTC"
+	AutoArchive   *durationpb.Duration   `protobuf:"bytes,9,opt,name=auto_archive,json=autoArchive,proto3" json:"auto_archive,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateScheduleRequest) Reset() {
+	*x = UpdateScheduleRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateScheduleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateScheduleRequest) ProtoMessage() {}
+
+func (x *UpdateScheduleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateScheduleRequest.ProtoReflect.Descriptor instead.
+func (*UpdateScheduleRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *UpdateScheduleRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateScheduleRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetRunner() string {
+	if x != nil {
+		return x.Runner
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetInstructions() []*Instruction {
+	if x != nil {
+		return x.Instructions
+	}
+	return nil
+}
+
+func (x *UpdateScheduleRequest) GetCronExpr() string {
+	if x != nil {
+		return x.CronExpr
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *UpdateScheduleRequest) GetAutoArchive() *durationpb.Duration {
+	if x != nil {
+		return x.AutoArchive
+	}
+	return nil
+}
+
+type UpdateScheduleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schedule      *Schedule              `protobuf:"bytes,1,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateScheduleResponse) Reset() {
+	*x = UpdateScheduleResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateScheduleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateScheduleResponse) ProtoMessage() {}
+
+func (x *UpdateScheduleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateScheduleResponse.ProtoReflect.Descriptor instead.
+func (*UpdateScheduleResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *UpdateScheduleResponse) GetSchedule() *Schedule {
+	if x != nil {
+		return x.Schedule
+	}
+	return nil
+}
+
+type DeleteScheduleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteScheduleRequest) Reset() {
+	*x = DeleteScheduleRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteScheduleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteScheduleRequest) ProtoMessage() {}
+
+func (x *DeleteScheduleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteScheduleRequest.ProtoReflect.Descriptor instead.
+func (*DeleteScheduleRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *DeleteScheduleRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type DeleteScheduleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteScheduleResponse) Reset() {
+	*x = DeleteScheduleResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[123]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteScheduleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteScheduleResponse) ProtoMessage() {}
+
+func (x *DeleteScheduleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[123]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteScheduleResponse.ProtoReflect.Descriptor instead.
+func (*DeleteScheduleResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{123}
+}
+
+// SetScheduleEnabledRequest toggles a schedule: enabling recomputes next_run_at
+// from now; disabling sets next_run_at = NULL so the claim query skips it.
+type SetScheduleEnabledRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetScheduleEnabledRequest) Reset() {
+	*x = SetScheduleEnabledRequest{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[124]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetScheduleEnabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetScheduleEnabledRequest) ProtoMessage() {}
+
+func (x *SetScheduleEnabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[124]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetScheduleEnabledRequest.ProtoReflect.Descriptor instead.
+func (*SetScheduleEnabledRequest) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{124}
+}
+
+func (x *SetScheduleEnabledRequest) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *SetScheduleEnabledRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetScheduleEnabledResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Schedule      *Schedule              `protobuf:"bytes,1,opt,name=schedule,proto3" json:"schedule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetScheduleEnabledResponse) Reset() {
+	*x = SetScheduleEnabledResponse{}
+	mi := &file_xagent_v1_xagent_proto_msgTypes[125]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetScheduleEnabledResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetScheduleEnabledResponse) ProtoMessage() {}
+
+func (x *SetScheduleEnabledResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_xagent_v1_xagent_proto_msgTypes[125]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetScheduleEnabledResponse.ProtoReflect.Descriptor instead.
+func (*SetScheduleEnabledResponse) Descriptor() ([]byte, []int) {
+	return file_xagent_v1_xagent_proto_rawDescGZIP(), []int{125}
+}
+
+func (x *SetScheduleEnabledResponse) GetSchedule() *Schedule {
+	if x != nil {
+		return x.Schedule
+	}
+	return nil
+}
+
 var File_xagent_v1_xagent_proto protoreflect.FileDescriptor
 
 const file_xagent_v1_xagent_proto_rawDesc = "" +
@@ -6673,7 +7494,70 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x19CreateGitHubTokenResponse\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x129\n" +
 	"\n" +
-	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt*\x81\x01\n" +
+	"expires_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xfe\x04\n" +
+	"\bSchedule\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
+	"\tworkspace\x18\x03 \x01(\tR\tworkspace\x12\x16\n" +
+	"\x06runner\x18\x04 \x01(\tR\x06runner\x12\x1c\n" +
+	"\tnamespace\x18\x05 \x01(\tR\tnamespace\x12:\n" +
+	"\finstructions\x18\x06 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x1b\n" +
+	"\tcron_expr\x18\a \x01(\tR\bcronExpr\x12\x1a\n" +
+	"\btimezone\x18\b \x01(\tR\btimezone\x12\x18\n" +
+	"\aenabled\x18\t \x01(\bR\aenabled\x12<\n" +
+	"\fauto_archive\x18\n" +
+	" \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\x12:\n" +
+	"\vnext_run_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tnextRunAt\x12:\n" +
+	"\vlast_run_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tlastRunAt\x12 \n" +
+	"\flast_task_id\x18\r \x01(\x03R\n" +
+	"lastTaskId\x12\x1d\n" +
+	"\n" +
+	"created_by\x18\x0e \x01(\tR\tcreatedBy\x129\n" +
+	"\n" +
+	"created_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xdd\x02\n" +
+	"\x15CreateScheduleRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\tworkspace\x18\x02 \x01(\tR\tworkspace\x12\x16\n" +
+	"\x06runner\x18\x03 \x01(\tR\x06runner\x12\x1c\n" +
+	"\tnamespace\x18\x04 \x01(\tR\tnamespace\x12:\n" +
+	"\finstructions\x18\x05 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x1b\n" +
+	"\tcron_expr\x18\x06 \x01(\tR\bcronExpr\x12\x1a\n" +
+	"\btimezone\x18\a \x01(\tR\btimezone\x12\x1d\n" +
+	"\aenabled\x18\b \x01(\bH\x00R\aenabled\x88\x01\x01\x12<\n" +
+	"\fauto_archive\x18\t \x01(\v2\x19.google.protobuf.DurationR\vautoArchiveB\n" +
+	"\n" +
+	"\b_enabled\"I\n" +
+	"\x16CreateScheduleResponse\x12/\n" +
+	"\bschedule\x18\x01 \x01(\v2\x13.xagent.v1.ScheduleR\bschedule\"$\n" +
+	"\x12GetScheduleRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"F\n" +
+	"\x13GetScheduleResponse\x12/\n" +
+	"\bschedule\x18\x01 \x01(\v2\x13.xagent.v1.ScheduleR\bschedule\"\x16\n" +
+	"\x14ListSchedulesRequest\"J\n" +
+	"\x15ListSchedulesResponse\x121\n" +
+	"\tschedules\x18\x01 \x03(\v2\x13.xagent.v1.ScheduleR\tschedules\"\xc2\x02\n" +
+	"\x15UpdateScheduleRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
+	"\tworkspace\x18\x03 \x01(\tR\tworkspace\x12\x16\n" +
+	"\x06runner\x18\x04 \x01(\tR\x06runner\x12\x1c\n" +
+	"\tnamespace\x18\x05 \x01(\tR\tnamespace\x12:\n" +
+	"\finstructions\x18\x06 \x03(\v2\x16.xagent.v1.InstructionR\finstructions\x12\x1b\n" +
+	"\tcron_expr\x18\a \x01(\tR\bcronExpr\x12\x1a\n" +
+	"\btimezone\x18\b \x01(\tR\btimezone\x12<\n" +
+	"\fauto_archive\x18\t \x01(\v2\x19.google.protobuf.DurationR\vautoArchive\"I\n" +
+	"\x16UpdateScheduleResponse\x12/\n" +
+	"\bschedule\x18\x01 \x01(\v2\x13.xagent.v1.ScheduleR\bschedule\"'\n" +
+	"\x15DeleteScheduleRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"\x18\n" +
+	"\x16DeleteScheduleResponse\"E\n" +
+	"\x19SetScheduleEnabledRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\"M\n" +
+	"\x1aSetScheduleEnabledResponse\x12/\n" +
+	"\bschedule\x18\x01 \x01(\v2\x13.xagent.v1.ScheduleR\bschedule*\x81\x01\n" +
 	"\n" +
 	"TaskStatus\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\v\n" +
@@ -6704,7 +7588,7 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x1eLIFECYCLE_KIND_SANDBOX_STARTED\x10\b\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_EXITED\x10\t\x12!\n" +
 	"\x1dLIFECYCLE_KIND_SANDBOX_FAILED\x10\n" +
-	"2\x91\x1c\n" +
+	"2\x9b \n" +
 	"\rXAgentService\x127\n" +
 	"\x04Ping\x12\x16.xagent.v1.PingRequest\x1a\x17.xagent.v1.PingResponse\x12I\n" +
 	"\n" +
@@ -6754,7 +7638,13 @@ const file_xagent_v1_xagent_proto_rawDesc = "" +
 	"\x0fSetRoutingRules\x12!.xagent.v1.SetRoutingRulesRequest\x1a\".xagent.v1.SetRoutingRulesResponse\x12R\n" +
 	"\rGetEventTypes\x12\x1f.xagent.v1.GetEventTypesRequest\x1a .xagent.v1.GetEventTypesResponse\x12F\n" +
 	"\tTestEvent\x12\x1b.xagent.v1.TestEventRequest\x1a\x1c.xagent.v1.TestEventResponse\x12^\n" +
-	"\x11CreateGitHubToken\x12#.xagent.v1.CreateGitHubTokenRequest\x1a$.xagent.v1.CreateGitHubTokenResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
+	"\x11CreateGitHubToken\x12#.xagent.v1.CreateGitHubTokenRequest\x1a$.xagent.v1.CreateGitHubTokenResponse\x12U\n" +
+	"\x0eCreateSchedule\x12 .xagent.v1.CreateScheduleRequest\x1a!.xagent.v1.CreateScheduleResponse\x12L\n" +
+	"\vGetSchedule\x12\x1d.xagent.v1.GetScheduleRequest\x1a\x1e.xagent.v1.GetScheduleResponse\x12R\n" +
+	"\rListSchedules\x12\x1f.xagent.v1.ListSchedulesRequest\x1a .xagent.v1.ListSchedulesResponse\x12U\n" +
+	"\x0eUpdateSchedule\x12 .xagent.v1.UpdateScheduleRequest\x1a!.xagent.v1.UpdateScheduleResponse\x12U\n" +
+	"\x0eDeleteSchedule\x12 .xagent.v1.DeleteScheduleRequest\x1a!.xagent.v1.DeleteScheduleResponse\x12a\n" +
+	"\x12SetScheduleEnabled\x12$.xagent.v1.SetScheduleEnabledRequest\x1a%.xagent.v1.SetScheduleEnabledResponseB<Z:github.com/icholy/xagent/internal/proto/xagent/v1;xagentv1b\x06proto3"
 
 var (
 	file_xagent_v1_xagent_proto_rawDescOnce sync.Once
@@ -6769,7 +7659,7 @@ func file_xagent_v1_xagent_proto_rawDescGZIP() []byte {
 }
 
 var file_xagent_v1_xagent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 117)
+var file_xagent_v1_xagent_proto_msgTypes = make([]protoimpl.MessageInfo, 130)
 var file_xagent_v1_xagent_proto_goTypes = []any{
 	(TaskStatus)(0),                                // 0: xagent.v1.TaskStatus
 	(TaskCommand)(0),                               // 1: xagent.v1.TaskCommand
@@ -6887,21 +7777,34 @@ var file_xagent_v1_xagent_proto_goTypes = []any{
 	(*TestEventMatch)(nil),                         // 113: xagent.v1.TestEventMatch
 	(*CreateGitHubTokenRequest)(nil),               // 114: xagent.v1.CreateGitHubTokenRequest
 	(*CreateGitHubTokenResponse)(nil),              // 115: xagent.v1.CreateGitHubTokenResponse
-	nil,                                            // 116: xagent.v1.McpServer.EnvEntry
-	nil,                                            // 117: xagent.v1.ExternalPayload.DetailsEntry
-	nil,                                            // 118: xagent.v1.TestEventRequest.AttrsEntry
-	nil,                                            // 119: xagent.v1.TestEventRequest.DetailsEntry
-	(*timestamppb.Timestamp)(nil),                  // 120: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),                    // 121: google.protobuf.Duration
+	(*Schedule)(nil),                               // 116: xagent.v1.Schedule
+	(*CreateScheduleRequest)(nil),                  // 117: xagent.v1.CreateScheduleRequest
+	(*CreateScheduleResponse)(nil),                 // 118: xagent.v1.CreateScheduleResponse
+	(*GetScheduleRequest)(nil),                     // 119: xagent.v1.GetScheduleRequest
+	(*GetScheduleResponse)(nil),                    // 120: xagent.v1.GetScheduleResponse
+	(*ListSchedulesRequest)(nil),                   // 121: xagent.v1.ListSchedulesRequest
+	(*ListSchedulesResponse)(nil),                  // 122: xagent.v1.ListSchedulesResponse
+	(*UpdateScheduleRequest)(nil),                  // 123: xagent.v1.UpdateScheduleRequest
+	(*UpdateScheduleResponse)(nil),                 // 124: xagent.v1.UpdateScheduleResponse
+	(*DeleteScheduleRequest)(nil),                  // 125: xagent.v1.DeleteScheduleRequest
+	(*DeleteScheduleResponse)(nil),                 // 126: xagent.v1.DeleteScheduleResponse
+	(*SetScheduleEnabledRequest)(nil),              // 127: xagent.v1.SetScheduleEnabledRequest
+	(*SetScheduleEnabledResponse)(nil),             // 128: xagent.v1.SetScheduleEnabledResponse
+	nil,                                            // 129: xagent.v1.McpServer.EnvEntry
+	nil,                                            // 130: xagent.v1.ExternalPayload.DetailsEntry
+	nil,                                            // 131: xagent.v1.TestEventRequest.AttrsEntry
+	nil,                                            // 132: xagent.v1.TestEventRequest.DetailsEntry
+	(*timestamppb.Timestamp)(nil),                  // 133: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),                    // 134: google.protobuf.Duration
 }
 var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	0,   // 0: xagent.v1.Task.status:type_name -> xagent.v1.TaskStatus
-	120, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	120, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	133, // 1: xagent.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	133, // 2: xagent.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
 	1,   // 3: xagent.v1.Task.command:type_name -> xagent.v1.TaskCommand
 	6,   // 4: xagent.v1.Task.actions:type_name -> xagent.v1.TaskActions
-	121, // 5: xagent.v1.Task.auto_archive:type_name -> google.protobuf.Duration
-	116, // 6: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
+	134, // 5: xagent.v1.Task.auto_archive:type_name -> google.protobuf.Duration
+	129, // 6: xagent.v1.McpServer.env:type_name -> xagent.v1.McpServer.EnvEntry
 	9,   // 7: xagent.v1.GetProfileResponse.profile:type_name -> xagent.v1.Profile
 	82,  // 8: xagent.v1.GetProfileResponse.orgs:type_name -> xagent.v1.Org
 	74,  // 9: xagent.v1.GetProfileResponse.github_account:type_name -> xagent.v1.GitHubAccount
@@ -6909,149 +7812,176 @@ var file_xagent_v1_xagent_proto_depIdxs = []int32{
 	7,   // 11: xagent.v1.ListTasksResponse.tasks:type_name -> xagent.v1.Task
 	7,   // 12: xagent.v1.ListRunnerTasksResponse.tasks:type_name -> xagent.v1.Task
 	5,   // 13: xagent.v1.CreateTaskRequest.instructions:type_name -> xagent.v1.Instruction
-	121, // 14: xagent.v1.CreateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
+	134, // 14: xagent.v1.CreateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
 	7,   // 15: xagent.v1.CreateTaskResponse.task:type_name -> xagent.v1.Task
 	7,   // 16: xagent.v1.GetTaskResponse.task:type_name -> xagent.v1.Task
 	5,   // 17: xagent.v1.UpdateTaskRequest.add_instructions:type_name -> xagent.v1.Instruction
-	121, // 18: xagent.v1.UpdateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
-	120, // 19: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
+	134, // 18: xagent.v1.UpdateTaskRequest.auto_archive:type_name -> google.protobuf.Duration
+	133, // 19: xagent.v1.LogEntry.created_at:type_name -> google.protobuf.Timestamp
 	32,  // 20: xagent.v1.UploadLogsRequest.entries:type_name -> xagent.v1.LogEntry
-	120, // 21: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
+	133, // 21: xagent.v1.TaskLink.created_at:type_name -> google.protobuf.Timestamp
 	35,  // 22: xagent.v1.CreateLinkResponse.link:type_name -> xagent.v1.TaskLink
 	35,  // 23: xagent.v1.ListLinksResponse.links:type_name -> xagent.v1.TaskLink
-	120, // 24: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
+	133, // 24: xagent.v1.Event.created_at:type_name -> google.protobuf.Timestamp
 	41,  // 25: xagent.v1.Event.instruction:type_name -> xagent.v1.InstructionPayload
 	42,  // 26: xagent.v1.Event.external:type_name -> xagent.v1.ExternalPayload
 	43,  // 27: xagent.v1.Event.report:type_name -> xagent.v1.ReportPayload
 	45,  // 28: xagent.v1.Event.lifecycle:type_name -> xagent.v1.LifecyclePayload
 	44,  // 29: xagent.v1.Event.link:type_name -> xagent.v1.LinkPayload
-	117, // 30: xagent.v1.ExternalPayload.details:type_name -> xagent.v1.ExternalPayload.DetailsEntry
+	130, // 30: xagent.v1.ExternalPayload.details:type_name -> xagent.v1.ExternalPayload.DetailsEntry
 	2,   // 31: xagent.v1.LifecyclePayload.kind:type_name -> xagent.v1.LifecycleKind
 	46,  // 32: xagent.v1.LifecyclePayload.actor:type_name -> xagent.v1.Actor
 	40,  // 33: xagent.v1.ListExternalEventsResponse.events:type_name -> xagent.v1.Event
 	40,  // 34: xagent.v1.GetEventResponse.event:type_name -> xagent.v1.Event
 	40,  // 35: xagent.v1.ListEventsByTaskResponse.events:type_name -> xagent.v1.Event
 	55,  // 36: xagent.v1.SubmitRunnerEventsRequest.events:type_name -> xagent.v1.RunnerEvent
-	120, // 37: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
+	133, // 37: xagent.v1.RegisteredWorkspace.updated_at:type_name -> google.protobuf.Timestamp
 	60,  // 38: xagent.v1.RegisterWorkspacesRequest.workspaces:type_name -> xagent.v1.RegisteredWorkspace
 	60,  // 39: xagent.v1.ListWorkspacesResponse.workspaces:type_name -> xagent.v1.RegisteredWorkspace
-	120, // 40: xagent.v1.Key.expires_at:type_name -> google.protobuf.Timestamp
-	120, // 41: xagent.v1.Key.created_at:type_name -> google.protobuf.Timestamp
-	120, // 42: xagent.v1.CreateKeyRequest.expires_at:type_name -> google.protobuf.Timestamp
+	133, // 40: xagent.v1.Key.expires_at:type_name -> google.protobuf.Timestamp
+	133, // 41: xagent.v1.Key.created_at:type_name -> google.protobuf.Timestamp
+	133, // 42: xagent.v1.CreateKeyRequest.expires_at:type_name -> google.protobuf.Timestamp
 	67,  // 43: xagent.v1.CreateKeyResponse.key:type_name -> xagent.v1.Key
 	67,  // 44: xagent.v1.ListKeysResponse.keys:type_name -> xagent.v1.Key
-	120, // 45: xagent.v1.GitHubAccount.created_at:type_name -> google.protobuf.Timestamp
-	120, // 46: xagent.v1.AtlassianAccount.created_at:type_name -> google.protobuf.Timestamp
-	120, // 47: xagent.v1.Org.created_at:type_name -> google.protobuf.Timestamp
-	120, // 48: xagent.v1.Org.updated_at:type_name -> google.protobuf.Timestamp
-	120, // 49: xagent.v1.OrgMember.created_at:type_name -> google.protobuf.Timestamp
+	133, // 45: xagent.v1.GitHubAccount.created_at:type_name -> google.protobuf.Timestamp
+	133, // 46: xagent.v1.AtlassianAccount.created_at:type_name -> google.protobuf.Timestamp
+	133, // 47: xagent.v1.Org.created_at:type_name -> google.protobuf.Timestamp
+	133, // 48: xagent.v1.Org.updated_at:type_name -> google.protobuf.Timestamp
+	133, // 49: xagent.v1.OrgMember.created_at:type_name -> google.protobuf.Timestamp
 	82,  // 50: xagent.v1.CreateOrgResponse.org:type_name -> xagent.v1.Org
 	82,  // 51: xagent.v1.ListOrgsResponse.orgs:type_name -> xagent.v1.Org
 	83,  // 52: xagent.v1.AddOrgMemberResponse.member:type_name -> xagent.v1.OrgMember
 	83,  // 53: xagent.v1.ListOrgMembersResponse.members:type_name -> xagent.v1.OrgMember
 	102, // 54: xagent.v1.RoutingRule.create:type_name -> xagent.v1.CreateTaskAction
 	100, // 55: xagent.v1.RoutingRule.conditions:type_name -> xagent.v1.RuleCondition
-	121, // 56: xagent.v1.CreateTaskAction.auto_archive:type_name -> google.protobuf.Duration
+	134, // 56: xagent.v1.CreateTaskAction.auto_archive:type_name -> google.protobuf.Duration
 	101, // 57: xagent.v1.GetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
 	101, // 58: xagent.v1.SetRoutingRulesRequest.rules:type_name -> xagent.v1.RoutingRule
 	101, // 59: xagent.v1.SetRoutingRulesResponse.rules:type_name -> xagent.v1.RoutingRule
 	107, // 60: xagent.v1.EventTypeDef.attrs:type_name -> xagent.v1.AttrDef
 	108, // 61: xagent.v1.GetEventTypesResponse.event_types:type_name -> xagent.v1.EventTypeDef
-	118, // 62: xagent.v1.TestEventRequest.attrs:type_name -> xagent.v1.TestEventRequest.AttrsEntry
-	119, // 63: xagent.v1.TestEventRequest.details:type_name -> xagent.v1.TestEventRequest.DetailsEntry
+	131, // 62: xagent.v1.TestEventRequest.attrs:type_name -> xagent.v1.TestEventRequest.AttrsEntry
+	132, // 63: xagent.v1.TestEventRequest.details:type_name -> xagent.v1.TestEventRequest.DetailsEntry
 	113, // 64: xagent.v1.TestEventResponse.matches:type_name -> xagent.v1.TestEventMatch
-	120, // 65: xagent.v1.CreateGitHubTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
-	3,   // 66: xagent.v1.XAgentService.Ping:input_type -> xagent.v1.PingRequest
-	10,  // 67: xagent.v1.XAgentService.GetProfile:input_type -> xagent.v1.GetProfileRequest
-	12,  // 68: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
-	14,  // 69: xagent.v1.XAgentService.ListRunnerTasks:input_type -> xagent.v1.ListRunnerTasksRequest
-	16,  // 70: xagent.v1.XAgentService.CreateTask:input_type -> xagent.v1.CreateTaskRequest
-	18,  // 71: xagent.v1.XAgentService.GetTask:input_type -> xagent.v1.GetTaskRequest
-	20,  // 72: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
-	22,  // 73: xagent.v1.XAgentService.ArchiveTask:input_type -> xagent.v1.ArchiveTaskRequest
-	24,  // 74: xagent.v1.XAgentService.UnarchiveTask:input_type -> xagent.v1.UnarchiveTaskRequest
-	26,  // 75: xagent.v1.XAgentService.CancelTask:input_type -> xagent.v1.CancelTaskRequest
-	28,  // 76: xagent.v1.XAgentService.RestartTask:input_type -> xagent.v1.RestartTaskRequest
-	30,  // 77: xagent.v1.XAgentService.OpenShell:input_type -> xagent.v1.OpenShellRequest
-	33,  // 78: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
-	36,  // 79: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
-	38,  // 80: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
-	47,  // 81: xagent.v1.XAgentService.ListExternalEvents:input_type -> xagent.v1.ListExternalEventsRequest
-	49,  // 82: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
-	51,  // 83: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
-	53,  // 84: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
-	56,  // 85: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
-	58,  // 86: xagent.v1.XAgentService.CreateTaskToken:input_type -> xagent.v1.CreateTaskTokenRequest
-	61,  // 87: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
-	63,  // 88: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
-	65,  // 89: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
-	68,  // 90: xagent.v1.XAgentService.CreateKey:input_type -> xagent.v1.CreateKeyRequest
-	70,  // 91: xagent.v1.XAgentService.ListKeys:input_type -> xagent.v1.ListKeysRequest
-	72,  // 92: xagent.v1.XAgentService.DeleteKey:input_type -> xagent.v1.DeleteKeyRequest
-	75,  // 93: xagent.v1.XAgentService.UnlinkGitHubAccount:input_type -> xagent.v1.UnlinkGitHubAccountRequest
-	77,  // 94: xagent.v1.XAgentService.LinkGitHubInstallation:input_type -> xagent.v1.LinkGitHubInstallationRequest
-	80,  // 95: xagent.v1.XAgentService.UnlinkAtlassianAccount:input_type -> xagent.v1.UnlinkAtlassianAccountRequest
-	84,  // 96: xagent.v1.XAgentService.CreateOrg:input_type -> xagent.v1.CreateOrgRequest
-	86,  // 97: xagent.v1.XAgentService.ListOrgs:input_type -> xagent.v1.ListOrgsRequest
-	88,  // 98: xagent.v1.XAgentService.DeleteOrg:input_type -> xagent.v1.DeleteOrgRequest
-	90,  // 99: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
-	92,  // 100: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
-	94,  // 101: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
-	96,  // 102: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
-	98,  // 103: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
-	103, // 104: xagent.v1.XAgentService.GetRoutingRules:input_type -> xagent.v1.GetRoutingRulesRequest
-	105, // 105: xagent.v1.XAgentService.SetRoutingRules:input_type -> xagent.v1.SetRoutingRulesRequest
-	109, // 106: xagent.v1.XAgentService.GetEventTypes:input_type -> xagent.v1.GetEventTypesRequest
-	111, // 107: xagent.v1.XAgentService.TestEvent:input_type -> xagent.v1.TestEventRequest
-	114, // 108: xagent.v1.XAgentService.CreateGitHubToken:input_type -> xagent.v1.CreateGitHubTokenRequest
-	4,   // 109: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
-	11,  // 110: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
-	13,  // 111: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
-	15,  // 112: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
-	17,  // 113: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
-	19,  // 114: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
-	21,  // 115: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
-	23,  // 116: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
-	25,  // 117: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
-	27,  // 118: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
-	29,  // 119: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
-	31,  // 120: xagent.v1.XAgentService.OpenShell:output_type -> xagent.v1.OpenShellResponse
-	34,  // 121: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
-	37,  // 122: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
-	39,  // 123: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
-	48,  // 124: xagent.v1.XAgentService.ListExternalEvents:output_type -> xagent.v1.ListExternalEventsResponse
-	50,  // 125: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
-	52,  // 126: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
-	54,  // 127: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
-	57,  // 128: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
-	59,  // 129: xagent.v1.XAgentService.CreateTaskToken:output_type -> xagent.v1.CreateTaskTokenResponse
-	62,  // 130: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
-	64,  // 131: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
-	66,  // 132: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
-	69,  // 133: xagent.v1.XAgentService.CreateKey:output_type -> xagent.v1.CreateKeyResponse
-	71,  // 134: xagent.v1.XAgentService.ListKeys:output_type -> xagent.v1.ListKeysResponse
-	73,  // 135: xagent.v1.XAgentService.DeleteKey:output_type -> xagent.v1.DeleteKeyResponse
-	76,  // 136: xagent.v1.XAgentService.UnlinkGitHubAccount:output_type -> xagent.v1.UnlinkGitHubAccountResponse
-	78,  // 137: xagent.v1.XAgentService.LinkGitHubInstallation:output_type -> xagent.v1.LinkGitHubInstallationResponse
-	81,  // 138: xagent.v1.XAgentService.UnlinkAtlassianAccount:output_type -> xagent.v1.UnlinkAtlassianAccountResponse
-	85,  // 139: xagent.v1.XAgentService.CreateOrg:output_type -> xagent.v1.CreateOrgResponse
-	87,  // 140: xagent.v1.XAgentService.ListOrgs:output_type -> xagent.v1.ListOrgsResponse
-	89,  // 141: xagent.v1.XAgentService.DeleteOrg:output_type -> xagent.v1.DeleteOrgResponse
-	91,  // 142: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
-	93,  // 143: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
-	95,  // 144: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
-	97,  // 145: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
-	99,  // 146: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
-	104, // 147: xagent.v1.XAgentService.GetRoutingRules:output_type -> xagent.v1.GetRoutingRulesResponse
-	106, // 148: xagent.v1.XAgentService.SetRoutingRules:output_type -> xagent.v1.SetRoutingRulesResponse
-	110, // 149: xagent.v1.XAgentService.GetEventTypes:output_type -> xagent.v1.GetEventTypesResponse
-	112, // 150: xagent.v1.XAgentService.TestEvent:output_type -> xagent.v1.TestEventResponse
-	115, // 151: xagent.v1.XAgentService.CreateGitHubToken:output_type -> xagent.v1.CreateGitHubTokenResponse
-	109, // [109:152] is the sub-list for method output_type
-	66,  // [66:109] is the sub-list for method input_type
-	66,  // [66:66] is the sub-list for extension type_name
-	66,  // [66:66] is the sub-list for extension extendee
-	0,   // [0:66] is the sub-list for field type_name
+	133, // 65: xagent.v1.CreateGitHubTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
+	5,   // 66: xagent.v1.Schedule.instructions:type_name -> xagent.v1.Instruction
+	134, // 67: xagent.v1.Schedule.auto_archive:type_name -> google.protobuf.Duration
+	133, // 68: xagent.v1.Schedule.next_run_at:type_name -> google.protobuf.Timestamp
+	133, // 69: xagent.v1.Schedule.last_run_at:type_name -> google.protobuf.Timestamp
+	133, // 70: xagent.v1.Schedule.created_at:type_name -> google.protobuf.Timestamp
+	133, // 71: xagent.v1.Schedule.updated_at:type_name -> google.protobuf.Timestamp
+	5,   // 72: xagent.v1.CreateScheduleRequest.instructions:type_name -> xagent.v1.Instruction
+	134, // 73: xagent.v1.CreateScheduleRequest.auto_archive:type_name -> google.protobuf.Duration
+	116, // 74: xagent.v1.CreateScheduleResponse.schedule:type_name -> xagent.v1.Schedule
+	116, // 75: xagent.v1.GetScheduleResponse.schedule:type_name -> xagent.v1.Schedule
+	116, // 76: xagent.v1.ListSchedulesResponse.schedules:type_name -> xagent.v1.Schedule
+	5,   // 77: xagent.v1.UpdateScheduleRequest.instructions:type_name -> xagent.v1.Instruction
+	134, // 78: xagent.v1.UpdateScheduleRequest.auto_archive:type_name -> google.protobuf.Duration
+	116, // 79: xagent.v1.UpdateScheduleResponse.schedule:type_name -> xagent.v1.Schedule
+	116, // 80: xagent.v1.SetScheduleEnabledResponse.schedule:type_name -> xagent.v1.Schedule
+	3,   // 81: xagent.v1.XAgentService.Ping:input_type -> xagent.v1.PingRequest
+	10,  // 82: xagent.v1.XAgentService.GetProfile:input_type -> xagent.v1.GetProfileRequest
+	12,  // 83: xagent.v1.XAgentService.ListTasks:input_type -> xagent.v1.ListTasksRequest
+	14,  // 84: xagent.v1.XAgentService.ListRunnerTasks:input_type -> xagent.v1.ListRunnerTasksRequest
+	16,  // 85: xagent.v1.XAgentService.CreateTask:input_type -> xagent.v1.CreateTaskRequest
+	18,  // 86: xagent.v1.XAgentService.GetTask:input_type -> xagent.v1.GetTaskRequest
+	20,  // 87: xagent.v1.XAgentService.UpdateTask:input_type -> xagent.v1.UpdateTaskRequest
+	22,  // 88: xagent.v1.XAgentService.ArchiveTask:input_type -> xagent.v1.ArchiveTaskRequest
+	24,  // 89: xagent.v1.XAgentService.UnarchiveTask:input_type -> xagent.v1.UnarchiveTaskRequest
+	26,  // 90: xagent.v1.XAgentService.CancelTask:input_type -> xagent.v1.CancelTaskRequest
+	28,  // 91: xagent.v1.XAgentService.RestartTask:input_type -> xagent.v1.RestartTaskRequest
+	30,  // 92: xagent.v1.XAgentService.OpenShell:input_type -> xagent.v1.OpenShellRequest
+	33,  // 93: xagent.v1.XAgentService.UploadLogs:input_type -> xagent.v1.UploadLogsRequest
+	36,  // 94: xagent.v1.XAgentService.CreateLink:input_type -> xagent.v1.CreateLinkRequest
+	38,  // 95: xagent.v1.XAgentService.ListLinks:input_type -> xagent.v1.ListLinksRequest
+	47,  // 96: xagent.v1.XAgentService.ListExternalEvents:input_type -> xagent.v1.ListExternalEventsRequest
+	49,  // 97: xagent.v1.XAgentService.GetEvent:input_type -> xagent.v1.GetEventRequest
+	51,  // 98: xagent.v1.XAgentService.DeleteEvent:input_type -> xagent.v1.DeleteEventRequest
+	53,  // 99: xagent.v1.XAgentService.ListEventsByTask:input_type -> xagent.v1.ListEventsByTaskRequest
+	56,  // 100: xagent.v1.XAgentService.SubmitRunnerEvents:input_type -> xagent.v1.SubmitRunnerEventsRequest
+	58,  // 101: xagent.v1.XAgentService.CreateTaskToken:input_type -> xagent.v1.CreateTaskTokenRequest
+	61,  // 102: xagent.v1.XAgentService.RegisterWorkspaces:input_type -> xagent.v1.RegisterWorkspacesRequest
+	63,  // 103: xagent.v1.XAgentService.ListWorkspaces:input_type -> xagent.v1.ListWorkspacesRequest
+	65,  // 104: xagent.v1.XAgentService.ClearWorkspaces:input_type -> xagent.v1.ClearWorkspacesRequest
+	68,  // 105: xagent.v1.XAgentService.CreateKey:input_type -> xagent.v1.CreateKeyRequest
+	70,  // 106: xagent.v1.XAgentService.ListKeys:input_type -> xagent.v1.ListKeysRequest
+	72,  // 107: xagent.v1.XAgentService.DeleteKey:input_type -> xagent.v1.DeleteKeyRequest
+	75,  // 108: xagent.v1.XAgentService.UnlinkGitHubAccount:input_type -> xagent.v1.UnlinkGitHubAccountRequest
+	77,  // 109: xagent.v1.XAgentService.LinkGitHubInstallation:input_type -> xagent.v1.LinkGitHubInstallationRequest
+	80,  // 110: xagent.v1.XAgentService.UnlinkAtlassianAccount:input_type -> xagent.v1.UnlinkAtlassianAccountRequest
+	84,  // 111: xagent.v1.XAgentService.CreateOrg:input_type -> xagent.v1.CreateOrgRequest
+	86,  // 112: xagent.v1.XAgentService.ListOrgs:input_type -> xagent.v1.ListOrgsRequest
+	88,  // 113: xagent.v1.XAgentService.DeleteOrg:input_type -> xagent.v1.DeleteOrgRequest
+	90,  // 114: xagent.v1.XAgentService.AddOrgMember:input_type -> xagent.v1.AddOrgMemberRequest
+	92,  // 115: xagent.v1.XAgentService.RemoveOrgMember:input_type -> xagent.v1.RemoveOrgMemberRequest
+	94,  // 116: xagent.v1.XAgentService.ListOrgMembers:input_type -> xagent.v1.ListOrgMembersRequest
+	96,  // 117: xagent.v1.XAgentService.GetOrgSettings:input_type -> xagent.v1.GetOrgSettingsRequest
+	98,  // 118: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:input_type -> xagent.v1.GenerateAtlassianWebhookSecretRequest
+	103, // 119: xagent.v1.XAgentService.GetRoutingRules:input_type -> xagent.v1.GetRoutingRulesRequest
+	105, // 120: xagent.v1.XAgentService.SetRoutingRules:input_type -> xagent.v1.SetRoutingRulesRequest
+	109, // 121: xagent.v1.XAgentService.GetEventTypes:input_type -> xagent.v1.GetEventTypesRequest
+	111, // 122: xagent.v1.XAgentService.TestEvent:input_type -> xagent.v1.TestEventRequest
+	114, // 123: xagent.v1.XAgentService.CreateGitHubToken:input_type -> xagent.v1.CreateGitHubTokenRequest
+	117, // 124: xagent.v1.XAgentService.CreateSchedule:input_type -> xagent.v1.CreateScheduleRequest
+	119, // 125: xagent.v1.XAgentService.GetSchedule:input_type -> xagent.v1.GetScheduleRequest
+	121, // 126: xagent.v1.XAgentService.ListSchedules:input_type -> xagent.v1.ListSchedulesRequest
+	123, // 127: xagent.v1.XAgentService.UpdateSchedule:input_type -> xagent.v1.UpdateScheduleRequest
+	125, // 128: xagent.v1.XAgentService.DeleteSchedule:input_type -> xagent.v1.DeleteScheduleRequest
+	127, // 129: xagent.v1.XAgentService.SetScheduleEnabled:input_type -> xagent.v1.SetScheduleEnabledRequest
+	4,   // 130: xagent.v1.XAgentService.Ping:output_type -> xagent.v1.PingResponse
+	11,  // 131: xagent.v1.XAgentService.GetProfile:output_type -> xagent.v1.GetProfileResponse
+	13,  // 132: xagent.v1.XAgentService.ListTasks:output_type -> xagent.v1.ListTasksResponse
+	15,  // 133: xagent.v1.XAgentService.ListRunnerTasks:output_type -> xagent.v1.ListRunnerTasksResponse
+	17,  // 134: xagent.v1.XAgentService.CreateTask:output_type -> xagent.v1.CreateTaskResponse
+	19,  // 135: xagent.v1.XAgentService.GetTask:output_type -> xagent.v1.GetTaskResponse
+	21,  // 136: xagent.v1.XAgentService.UpdateTask:output_type -> xagent.v1.UpdateTaskResponse
+	23,  // 137: xagent.v1.XAgentService.ArchiveTask:output_type -> xagent.v1.ArchiveTaskResponse
+	25,  // 138: xagent.v1.XAgentService.UnarchiveTask:output_type -> xagent.v1.UnarchiveTaskResponse
+	27,  // 139: xagent.v1.XAgentService.CancelTask:output_type -> xagent.v1.CancelTaskResponse
+	29,  // 140: xagent.v1.XAgentService.RestartTask:output_type -> xagent.v1.RestartTaskResponse
+	31,  // 141: xagent.v1.XAgentService.OpenShell:output_type -> xagent.v1.OpenShellResponse
+	34,  // 142: xagent.v1.XAgentService.UploadLogs:output_type -> xagent.v1.UploadLogsResponse
+	37,  // 143: xagent.v1.XAgentService.CreateLink:output_type -> xagent.v1.CreateLinkResponse
+	39,  // 144: xagent.v1.XAgentService.ListLinks:output_type -> xagent.v1.ListLinksResponse
+	48,  // 145: xagent.v1.XAgentService.ListExternalEvents:output_type -> xagent.v1.ListExternalEventsResponse
+	50,  // 146: xagent.v1.XAgentService.GetEvent:output_type -> xagent.v1.GetEventResponse
+	52,  // 147: xagent.v1.XAgentService.DeleteEvent:output_type -> xagent.v1.DeleteEventResponse
+	54,  // 148: xagent.v1.XAgentService.ListEventsByTask:output_type -> xagent.v1.ListEventsByTaskResponse
+	57,  // 149: xagent.v1.XAgentService.SubmitRunnerEvents:output_type -> xagent.v1.SubmitRunnerEventsResponse
+	59,  // 150: xagent.v1.XAgentService.CreateTaskToken:output_type -> xagent.v1.CreateTaskTokenResponse
+	62,  // 151: xagent.v1.XAgentService.RegisterWorkspaces:output_type -> xagent.v1.RegisterWorkspacesResponse
+	64,  // 152: xagent.v1.XAgentService.ListWorkspaces:output_type -> xagent.v1.ListWorkspacesResponse
+	66,  // 153: xagent.v1.XAgentService.ClearWorkspaces:output_type -> xagent.v1.ClearWorkspacesResponse
+	69,  // 154: xagent.v1.XAgentService.CreateKey:output_type -> xagent.v1.CreateKeyResponse
+	71,  // 155: xagent.v1.XAgentService.ListKeys:output_type -> xagent.v1.ListKeysResponse
+	73,  // 156: xagent.v1.XAgentService.DeleteKey:output_type -> xagent.v1.DeleteKeyResponse
+	76,  // 157: xagent.v1.XAgentService.UnlinkGitHubAccount:output_type -> xagent.v1.UnlinkGitHubAccountResponse
+	78,  // 158: xagent.v1.XAgentService.LinkGitHubInstallation:output_type -> xagent.v1.LinkGitHubInstallationResponse
+	81,  // 159: xagent.v1.XAgentService.UnlinkAtlassianAccount:output_type -> xagent.v1.UnlinkAtlassianAccountResponse
+	85,  // 160: xagent.v1.XAgentService.CreateOrg:output_type -> xagent.v1.CreateOrgResponse
+	87,  // 161: xagent.v1.XAgentService.ListOrgs:output_type -> xagent.v1.ListOrgsResponse
+	89,  // 162: xagent.v1.XAgentService.DeleteOrg:output_type -> xagent.v1.DeleteOrgResponse
+	91,  // 163: xagent.v1.XAgentService.AddOrgMember:output_type -> xagent.v1.AddOrgMemberResponse
+	93,  // 164: xagent.v1.XAgentService.RemoveOrgMember:output_type -> xagent.v1.RemoveOrgMemberResponse
+	95,  // 165: xagent.v1.XAgentService.ListOrgMembers:output_type -> xagent.v1.ListOrgMembersResponse
+	97,  // 166: xagent.v1.XAgentService.GetOrgSettings:output_type -> xagent.v1.GetOrgSettingsResponse
+	99,  // 167: xagent.v1.XAgentService.GenerateAtlassianWebhookSecret:output_type -> xagent.v1.GenerateAtlassianWebhookSecretResponse
+	104, // 168: xagent.v1.XAgentService.GetRoutingRules:output_type -> xagent.v1.GetRoutingRulesResponse
+	106, // 169: xagent.v1.XAgentService.SetRoutingRules:output_type -> xagent.v1.SetRoutingRulesResponse
+	110, // 170: xagent.v1.XAgentService.GetEventTypes:output_type -> xagent.v1.GetEventTypesResponse
+	112, // 171: xagent.v1.XAgentService.TestEvent:output_type -> xagent.v1.TestEventResponse
+	115, // 172: xagent.v1.XAgentService.CreateGitHubToken:output_type -> xagent.v1.CreateGitHubTokenResponse
+	118, // 173: xagent.v1.XAgentService.CreateSchedule:output_type -> xagent.v1.CreateScheduleResponse
+	120, // 174: xagent.v1.XAgentService.GetSchedule:output_type -> xagent.v1.GetScheduleResponse
+	122, // 175: xagent.v1.XAgentService.ListSchedules:output_type -> xagent.v1.ListSchedulesResponse
+	124, // 176: xagent.v1.XAgentService.UpdateSchedule:output_type -> xagent.v1.UpdateScheduleResponse
+	126, // 177: xagent.v1.XAgentService.DeleteSchedule:output_type -> xagent.v1.DeleteScheduleResponse
+	128, // 178: xagent.v1.XAgentService.SetScheduleEnabled:output_type -> xagent.v1.SetScheduleEnabledResponse
+	130, // [130:179] is the sub-list for method output_type
+	81,  // [81:130] is the sub-list for method input_type
+	81,  // [81:81] is the sub-list for extension type_name
+	81,  // [81:81] is the sub-list for extension extendee
+	0,   // [0:81] is the sub-list for field type_name
 }
 
 func init() { file_xagent_v1_xagent_proto_init() }
@@ -7066,13 +7996,14 @@ func file_xagent_v1_xagent_proto_init() {
 		(*Event_Lifecycle)(nil),
 		(*Event_Link)(nil),
 	}
+	file_xagent_v1_xagent_proto_msgTypes[114].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_xagent_v1_xagent_proto_rawDesc), len(file_xagent_v1_xagent_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   117,
+			NumMessages:   130,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

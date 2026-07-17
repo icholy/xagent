@@ -43,6 +43,9 @@ var _ Client = &ClientMock{}
 //			CreateOrgFunc: func(contextMoqParam context.Context, createOrgRequest *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error) {
 //				panic("mock out the CreateOrg method")
 //			},
+//			CreateScheduleFunc: func(contextMoqParam context.Context, createScheduleRequest *xagentv1.CreateScheduleRequest) (*xagentv1.CreateScheduleResponse, error) {
+//				panic("mock out the CreateSchedule method")
+//			},
 //			CreateTaskFunc: func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 //				panic("mock out the CreateTask method")
 //			},
@@ -57,6 +60,9 @@ var _ Client = &ClientMock{}
 //			},
 //			DeleteOrgFunc: func(contextMoqParam context.Context, deleteOrgRequest *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error) {
 //				panic("mock out the DeleteOrg method")
+//			},
+//			DeleteScheduleFunc: func(contextMoqParam context.Context, deleteScheduleRequest *xagentv1.DeleteScheduleRequest) (*xagentv1.DeleteScheduleResponse, error) {
+//				panic("mock out the DeleteSchedule method")
 //			},
 //			GenerateAtlassianWebhookSecretFunc: func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error) {
 //				panic("mock out the GenerateAtlassianWebhookSecret method")
@@ -75,6 +81,9 @@ var _ Client = &ClientMock{}
 //			},
 //			GetRoutingRulesFunc: func(contextMoqParam context.Context, getRoutingRulesRequest *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error) {
 //				panic("mock out the GetRoutingRules method")
+//			},
+//			GetScheduleFunc: func(contextMoqParam context.Context, getScheduleRequest *xagentv1.GetScheduleRequest) (*xagentv1.GetScheduleResponse, error) {
+//				panic("mock out the GetSchedule method")
 //			},
 //			GetTaskFunc: func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error) {
 //				panic("mock out the GetTask method")
@@ -103,6 +112,9 @@ var _ Client = &ClientMock{}
 //			ListRunnerTasksFunc: func(contextMoqParam context.Context, listRunnerTasksRequest *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error) {
 //				panic("mock out the ListRunnerTasks method")
 //			},
+//			ListSchedulesFunc: func(contextMoqParam context.Context, listSchedulesRequest *xagentv1.ListSchedulesRequest) (*xagentv1.ListSchedulesResponse, error) {
+//				panic("mock out the ListSchedules method")
+//			},
 //			ListTasksFunc: func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 //				panic("mock out the ListTasks method")
 //			},
@@ -127,6 +139,9 @@ var _ Client = &ClientMock{}
 //			SetRoutingRulesFunc: func(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error) {
 //				panic("mock out the SetRoutingRules method")
 //			},
+//			SetScheduleEnabledFunc: func(contextMoqParam context.Context, setScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest) (*xagentv1.SetScheduleEnabledResponse, error) {
+//				panic("mock out the SetScheduleEnabled method")
+//			},
 //			SubmitRunnerEventsFunc: func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 //				panic("mock out the SubmitRunnerEvents method")
 //			},
@@ -141,6 +156,9 @@ var _ Client = &ClientMock{}
 //			},
 //			UnlinkGitHubAccountFunc: func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error) {
 //				panic("mock out the UnlinkGitHubAccount method")
+//			},
+//			UpdateScheduleFunc: func(contextMoqParam context.Context, updateScheduleRequest *xagentv1.UpdateScheduleRequest) (*xagentv1.UpdateScheduleResponse, error) {
+//				panic("mock out the UpdateSchedule method")
 //			},
 //			UpdateTaskFunc: func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error) {
 //				panic("mock out the UpdateTask method")
@@ -179,6 +197,9 @@ type ClientMock struct {
 	// CreateOrgFunc mocks the CreateOrg method.
 	CreateOrgFunc func(contextMoqParam context.Context, createOrgRequest *xagentv1.CreateOrgRequest) (*xagentv1.CreateOrgResponse, error)
 
+	// CreateScheduleFunc mocks the CreateSchedule method.
+	CreateScheduleFunc func(contextMoqParam context.Context, createScheduleRequest *xagentv1.CreateScheduleRequest) (*xagentv1.CreateScheduleResponse, error)
+
 	// CreateTaskFunc mocks the CreateTask method.
 	CreateTaskFunc func(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error)
 
@@ -193,6 +214,9 @@ type ClientMock struct {
 
 	// DeleteOrgFunc mocks the DeleteOrg method.
 	DeleteOrgFunc func(contextMoqParam context.Context, deleteOrgRequest *xagentv1.DeleteOrgRequest) (*xagentv1.DeleteOrgResponse, error)
+
+	// DeleteScheduleFunc mocks the DeleteSchedule method.
+	DeleteScheduleFunc func(contextMoqParam context.Context, deleteScheduleRequest *xagentv1.DeleteScheduleRequest) (*xagentv1.DeleteScheduleResponse, error)
 
 	// GenerateAtlassianWebhookSecretFunc mocks the GenerateAtlassianWebhookSecret method.
 	GenerateAtlassianWebhookSecretFunc func(contextMoqParam context.Context, generateAtlassianWebhookSecretRequest *xagentv1.GenerateAtlassianWebhookSecretRequest) (*xagentv1.GenerateAtlassianWebhookSecretResponse, error)
@@ -211,6 +235,9 @@ type ClientMock struct {
 
 	// GetRoutingRulesFunc mocks the GetRoutingRules method.
 	GetRoutingRulesFunc func(contextMoqParam context.Context, getRoutingRulesRequest *xagentv1.GetRoutingRulesRequest) (*xagentv1.GetRoutingRulesResponse, error)
+
+	// GetScheduleFunc mocks the GetSchedule method.
+	GetScheduleFunc func(contextMoqParam context.Context, getScheduleRequest *xagentv1.GetScheduleRequest) (*xagentv1.GetScheduleResponse, error)
 
 	// GetTaskFunc mocks the GetTask method.
 	GetTaskFunc func(contextMoqParam context.Context, getTaskRequest *xagentv1.GetTaskRequest) (*xagentv1.GetTaskResponse, error)
@@ -239,6 +266,9 @@ type ClientMock struct {
 	// ListRunnerTasksFunc mocks the ListRunnerTasks method.
 	ListRunnerTasksFunc func(contextMoqParam context.Context, listRunnerTasksRequest *xagentv1.ListRunnerTasksRequest) (*xagentv1.ListRunnerTasksResponse, error)
 
+	// ListSchedulesFunc mocks the ListSchedules method.
+	ListSchedulesFunc func(contextMoqParam context.Context, listSchedulesRequest *xagentv1.ListSchedulesRequest) (*xagentv1.ListSchedulesResponse, error)
+
 	// ListTasksFunc mocks the ListTasks method.
 	ListTasksFunc func(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error)
 
@@ -263,6 +293,9 @@ type ClientMock struct {
 	// SetRoutingRulesFunc mocks the SetRoutingRules method.
 	SetRoutingRulesFunc func(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error)
 
+	// SetScheduleEnabledFunc mocks the SetScheduleEnabled method.
+	SetScheduleEnabledFunc func(contextMoqParam context.Context, setScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest) (*xagentv1.SetScheduleEnabledResponse, error)
+
 	// SubmitRunnerEventsFunc mocks the SubmitRunnerEvents method.
 	SubmitRunnerEventsFunc func(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error)
 
@@ -277,6 +310,9 @@ type ClientMock struct {
 
 	// UnlinkGitHubAccountFunc mocks the UnlinkGitHubAccount method.
 	UnlinkGitHubAccountFunc func(contextMoqParam context.Context, unlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest) (*xagentv1.UnlinkGitHubAccountResponse, error)
+
+	// UpdateScheduleFunc mocks the UpdateSchedule method.
+	UpdateScheduleFunc func(contextMoqParam context.Context, updateScheduleRequest *xagentv1.UpdateScheduleRequest) (*xagentv1.UpdateScheduleResponse, error)
 
 	// UpdateTaskFunc mocks the UpdateTask method.
 	UpdateTaskFunc func(contextMoqParam context.Context, updateTaskRequest *xagentv1.UpdateTaskRequest) (*xagentv1.UpdateTaskResponse, error)
@@ -342,6 +378,13 @@ type ClientMock struct {
 			// CreateOrgRequest is the createOrgRequest argument value.
 			CreateOrgRequest *xagentv1.CreateOrgRequest
 		}
+		// CreateSchedule holds details about calls to the CreateSchedule method.
+		CreateSchedule []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// CreateScheduleRequest is the createScheduleRequest argument value.
+			CreateScheduleRequest *xagentv1.CreateScheduleRequest
+		}
 		// CreateTask holds details about calls to the CreateTask method.
 		CreateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -376,6 +419,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// DeleteOrgRequest is the deleteOrgRequest argument value.
 			DeleteOrgRequest *xagentv1.DeleteOrgRequest
+		}
+		// DeleteSchedule holds details about calls to the DeleteSchedule method.
+		DeleteSchedule []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// DeleteScheduleRequest is the deleteScheduleRequest argument value.
+			DeleteScheduleRequest *xagentv1.DeleteScheduleRequest
 		}
 		// GenerateAtlassianWebhookSecret holds details about calls to the GenerateAtlassianWebhookSecret method.
 		GenerateAtlassianWebhookSecret []struct {
@@ -418,6 +468,13 @@ type ClientMock struct {
 			ContextMoqParam context.Context
 			// GetRoutingRulesRequest is the getRoutingRulesRequest argument value.
 			GetRoutingRulesRequest *xagentv1.GetRoutingRulesRequest
+		}
+		// GetSchedule holds details about calls to the GetSchedule method.
+		GetSchedule []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// GetScheduleRequest is the getScheduleRequest argument value.
+			GetScheduleRequest *xagentv1.GetScheduleRequest
 		}
 		// GetTask holds details about calls to the GetTask method.
 		GetTask []struct {
@@ -482,6 +539,13 @@ type ClientMock struct {
 			// ListRunnerTasksRequest is the listRunnerTasksRequest argument value.
 			ListRunnerTasksRequest *xagentv1.ListRunnerTasksRequest
 		}
+		// ListSchedules holds details about calls to the ListSchedules method.
+		ListSchedules []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// ListSchedulesRequest is the listSchedulesRequest argument value.
+			ListSchedulesRequest *xagentv1.ListSchedulesRequest
+		}
 		// ListTasks holds details about calls to the ListTasks method.
 		ListTasks []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -538,6 +602,13 @@ type ClientMock struct {
 			// SetRoutingRulesRequest is the setRoutingRulesRequest argument value.
 			SetRoutingRulesRequest *xagentv1.SetRoutingRulesRequest
 		}
+		// SetScheduleEnabled holds details about calls to the SetScheduleEnabled method.
+		SetScheduleEnabled []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// SetScheduleEnabledRequest is the setScheduleEnabledRequest argument value.
+			SetScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest
+		}
 		// SubmitRunnerEvents holds details about calls to the SubmitRunnerEvents method.
 		SubmitRunnerEvents []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -573,6 +644,13 @@ type ClientMock struct {
 			// UnlinkGitHubAccountRequest is the unlinkGitHubAccountRequest argument value.
 			UnlinkGitHubAccountRequest *xagentv1.UnlinkGitHubAccountRequest
 		}
+		// UpdateSchedule holds details about calls to the UpdateSchedule method.
+		UpdateSchedule []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// UpdateScheduleRequest is the updateScheduleRequest argument value.
+			UpdateScheduleRequest *xagentv1.UpdateScheduleRequest
+		}
 		// UpdateTask holds details about calls to the UpdateTask method.
 		UpdateTask []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -596,17 +674,20 @@ type ClientMock struct {
 	lockCreateKey                      sync.RWMutex
 	lockCreateLink                     sync.RWMutex
 	lockCreateOrg                      sync.RWMutex
+	lockCreateSchedule                 sync.RWMutex
 	lockCreateTask                     sync.RWMutex
 	lockCreateTaskToken                sync.RWMutex
 	lockDeleteEvent                    sync.RWMutex
 	lockDeleteKey                      sync.RWMutex
 	lockDeleteOrg                      sync.RWMutex
+	lockDeleteSchedule                 sync.RWMutex
 	lockGenerateAtlassianWebhookSecret sync.RWMutex
 	lockGetEvent                       sync.RWMutex
 	lockGetEventTypes                  sync.RWMutex
 	lockGetOrgSettings                 sync.RWMutex
 	lockGetProfile                     sync.RWMutex
 	lockGetRoutingRules                sync.RWMutex
+	lockGetSchedule                    sync.RWMutex
 	lockGetTask                        sync.RWMutex
 	lockLinkGitHubInstallation         sync.RWMutex
 	lockListEventsByTask               sync.RWMutex
@@ -616,6 +697,7 @@ type ClientMock struct {
 	lockListOrgMembers                 sync.RWMutex
 	lockListOrgs                       sync.RWMutex
 	lockListRunnerTasks                sync.RWMutex
+	lockListSchedules                  sync.RWMutex
 	lockListTasks                      sync.RWMutex
 	lockListWorkspaces                 sync.RWMutex
 	lockOpenShell                      sync.RWMutex
@@ -624,11 +706,13 @@ type ClientMock struct {
 	lockRemoveOrgMember                sync.RWMutex
 	lockRestartTask                    sync.RWMutex
 	lockSetRoutingRules                sync.RWMutex
+	lockSetScheduleEnabled             sync.RWMutex
 	lockSubmitRunnerEvents             sync.RWMutex
 	lockTestEvent                      sync.RWMutex
 	lockUnarchiveTask                  sync.RWMutex
 	lockUnlinkAtlassianAccount         sync.RWMutex
 	lockUnlinkGitHubAccount            sync.RWMutex
+	lockUpdateSchedule                 sync.RWMutex
 	lockUpdateTask                     sync.RWMutex
 	lockUploadLogs                     sync.RWMutex
 }
@@ -921,6 +1005,42 @@ func (mock *ClientMock) CreateOrgCalls() []struct {
 	return calls
 }
 
+// CreateSchedule calls CreateScheduleFunc.
+func (mock *ClientMock) CreateSchedule(contextMoqParam context.Context, createScheduleRequest *xagentv1.CreateScheduleRequest) (*xagentv1.CreateScheduleResponse, error) {
+	if mock.CreateScheduleFunc == nil {
+		panic("ClientMock.CreateScheduleFunc: method is nil but Client.CreateSchedule was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		CreateScheduleRequest *xagentv1.CreateScheduleRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		CreateScheduleRequest: createScheduleRequest,
+	}
+	mock.lockCreateSchedule.Lock()
+	mock.calls.CreateSchedule = append(mock.calls.CreateSchedule, callInfo)
+	mock.lockCreateSchedule.Unlock()
+	return mock.CreateScheduleFunc(contextMoqParam, createScheduleRequest)
+}
+
+// CreateScheduleCalls gets all the calls that were made to CreateSchedule.
+// Check the length with:
+//
+//	len(mockedClient.CreateScheduleCalls())
+func (mock *ClientMock) CreateScheduleCalls() []struct {
+	ContextMoqParam       context.Context
+	CreateScheduleRequest *xagentv1.CreateScheduleRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		CreateScheduleRequest *xagentv1.CreateScheduleRequest
+	}
+	mock.lockCreateSchedule.RLock()
+	calls = mock.calls.CreateSchedule
+	mock.lockCreateSchedule.RUnlock()
+	return calls
+}
+
 // CreateTask calls CreateTaskFunc.
 func (mock *ClientMock) CreateTask(contextMoqParam context.Context, createTaskRequest *xagentv1.CreateTaskRequest) (*xagentv1.CreateTaskResponse, error) {
 	if mock.CreateTaskFunc == nil {
@@ -1098,6 +1218,42 @@ func (mock *ClientMock) DeleteOrgCalls() []struct {
 	mock.lockDeleteOrg.RLock()
 	calls = mock.calls.DeleteOrg
 	mock.lockDeleteOrg.RUnlock()
+	return calls
+}
+
+// DeleteSchedule calls DeleteScheduleFunc.
+func (mock *ClientMock) DeleteSchedule(contextMoqParam context.Context, deleteScheduleRequest *xagentv1.DeleteScheduleRequest) (*xagentv1.DeleteScheduleResponse, error) {
+	if mock.DeleteScheduleFunc == nil {
+		panic("ClientMock.DeleteScheduleFunc: method is nil but Client.DeleteSchedule was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		DeleteScheduleRequest *xagentv1.DeleteScheduleRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		DeleteScheduleRequest: deleteScheduleRequest,
+	}
+	mock.lockDeleteSchedule.Lock()
+	mock.calls.DeleteSchedule = append(mock.calls.DeleteSchedule, callInfo)
+	mock.lockDeleteSchedule.Unlock()
+	return mock.DeleteScheduleFunc(contextMoqParam, deleteScheduleRequest)
+}
+
+// DeleteScheduleCalls gets all the calls that were made to DeleteSchedule.
+// Check the length with:
+//
+//	len(mockedClient.DeleteScheduleCalls())
+func (mock *ClientMock) DeleteScheduleCalls() []struct {
+	ContextMoqParam       context.Context
+	DeleteScheduleRequest *xagentv1.DeleteScheduleRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		DeleteScheduleRequest *xagentv1.DeleteScheduleRequest
+	}
+	mock.lockDeleteSchedule.RLock()
+	calls = mock.calls.DeleteSchedule
+	mock.lockDeleteSchedule.RUnlock()
 	return calls
 }
 
@@ -1314,6 +1470,42 @@ func (mock *ClientMock) GetRoutingRulesCalls() []struct {
 	mock.lockGetRoutingRules.RLock()
 	calls = mock.calls.GetRoutingRules
 	mock.lockGetRoutingRules.RUnlock()
+	return calls
+}
+
+// GetSchedule calls GetScheduleFunc.
+func (mock *ClientMock) GetSchedule(contextMoqParam context.Context, getScheduleRequest *xagentv1.GetScheduleRequest) (*xagentv1.GetScheduleResponse, error) {
+	if mock.GetScheduleFunc == nil {
+		panic("ClientMock.GetScheduleFunc: method is nil but Client.GetSchedule was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam    context.Context
+		GetScheduleRequest *xagentv1.GetScheduleRequest
+	}{
+		ContextMoqParam:    contextMoqParam,
+		GetScheduleRequest: getScheduleRequest,
+	}
+	mock.lockGetSchedule.Lock()
+	mock.calls.GetSchedule = append(mock.calls.GetSchedule, callInfo)
+	mock.lockGetSchedule.Unlock()
+	return mock.GetScheduleFunc(contextMoqParam, getScheduleRequest)
+}
+
+// GetScheduleCalls gets all the calls that were made to GetSchedule.
+// Check the length with:
+//
+//	len(mockedClient.GetScheduleCalls())
+func (mock *ClientMock) GetScheduleCalls() []struct {
+	ContextMoqParam    context.Context
+	GetScheduleRequest *xagentv1.GetScheduleRequest
+} {
+	var calls []struct {
+		ContextMoqParam    context.Context
+		GetScheduleRequest *xagentv1.GetScheduleRequest
+	}
+	mock.lockGetSchedule.RLock()
+	calls = mock.calls.GetSchedule
+	mock.lockGetSchedule.RUnlock()
 	return calls
 }
 
@@ -1641,6 +1833,42 @@ func (mock *ClientMock) ListRunnerTasksCalls() []struct {
 	return calls
 }
 
+// ListSchedules calls ListSchedulesFunc.
+func (mock *ClientMock) ListSchedules(contextMoqParam context.Context, listSchedulesRequest *xagentv1.ListSchedulesRequest) (*xagentv1.ListSchedulesResponse, error) {
+	if mock.ListSchedulesFunc == nil {
+		panic("ClientMock.ListSchedulesFunc: method is nil but Client.ListSchedules was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam      context.Context
+		ListSchedulesRequest *xagentv1.ListSchedulesRequest
+	}{
+		ContextMoqParam:      contextMoqParam,
+		ListSchedulesRequest: listSchedulesRequest,
+	}
+	mock.lockListSchedules.Lock()
+	mock.calls.ListSchedules = append(mock.calls.ListSchedules, callInfo)
+	mock.lockListSchedules.Unlock()
+	return mock.ListSchedulesFunc(contextMoqParam, listSchedulesRequest)
+}
+
+// ListSchedulesCalls gets all the calls that were made to ListSchedules.
+// Check the length with:
+//
+//	len(mockedClient.ListSchedulesCalls())
+func (mock *ClientMock) ListSchedulesCalls() []struct {
+	ContextMoqParam      context.Context
+	ListSchedulesRequest *xagentv1.ListSchedulesRequest
+} {
+	var calls []struct {
+		ContextMoqParam      context.Context
+		ListSchedulesRequest *xagentv1.ListSchedulesRequest
+	}
+	mock.lockListSchedules.RLock()
+	calls = mock.calls.ListSchedules
+	mock.lockListSchedules.RUnlock()
+	return calls
+}
+
 // ListTasks calls ListTasksFunc.
 func (mock *ClientMock) ListTasks(contextMoqParam context.Context, listTasksRequest *xagentv1.ListTasksRequest) (*xagentv1.ListTasksResponse, error) {
 	if mock.ListTasksFunc == nil {
@@ -1929,6 +2157,42 @@ func (mock *ClientMock) SetRoutingRulesCalls() []struct {
 	return calls
 }
 
+// SetScheduleEnabled calls SetScheduleEnabledFunc.
+func (mock *ClientMock) SetScheduleEnabled(contextMoqParam context.Context, setScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest) (*xagentv1.SetScheduleEnabledResponse, error) {
+	if mock.SetScheduleEnabledFunc == nil {
+		panic("ClientMock.SetScheduleEnabledFunc: method is nil but Client.SetScheduleEnabled was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam           context.Context
+		SetScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest
+	}{
+		ContextMoqParam:           contextMoqParam,
+		SetScheduleEnabledRequest: setScheduleEnabledRequest,
+	}
+	mock.lockSetScheduleEnabled.Lock()
+	mock.calls.SetScheduleEnabled = append(mock.calls.SetScheduleEnabled, callInfo)
+	mock.lockSetScheduleEnabled.Unlock()
+	return mock.SetScheduleEnabledFunc(contextMoqParam, setScheduleEnabledRequest)
+}
+
+// SetScheduleEnabledCalls gets all the calls that were made to SetScheduleEnabled.
+// Check the length with:
+//
+//	len(mockedClient.SetScheduleEnabledCalls())
+func (mock *ClientMock) SetScheduleEnabledCalls() []struct {
+	ContextMoqParam           context.Context
+	SetScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest
+} {
+	var calls []struct {
+		ContextMoqParam           context.Context
+		SetScheduleEnabledRequest *xagentv1.SetScheduleEnabledRequest
+	}
+	mock.lockSetScheduleEnabled.RLock()
+	calls = mock.calls.SetScheduleEnabled
+	mock.lockSetScheduleEnabled.RUnlock()
+	return calls
+}
+
 // SubmitRunnerEvents calls SubmitRunnerEventsFunc.
 func (mock *ClientMock) SubmitRunnerEvents(contextMoqParam context.Context, submitRunnerEventsRequest *xagentv1.SubmitRunnerEventsRequest) (*xagentv1.SubmitRunnerEventsResponse, error) {
 	if mock.SubmitRunnerEventsFunc == nil {
@@ -2106,6 +2370,42 @@ func (mock *ClientMock) UnlinkGitHubAccountCalls() []struct {
 	mock.lockUnlinkGitHubAccount.RLock()
 	calls = mock.calls.UnlinkGitHubAccount
 	mock.lockUnlinkGitHubAccount.RUnlock()
+	return calls
+}
+
+// UpdateSchedule calls UpdateScheduleFunc.
+func (mock *ClientMock) UpdateSchedule(contextMoqParam context.Context, updateScheduleRequest *xagentv1.UpdateScheduleRequest) (*xagentv1.UpdateScheduleResponse, error) {
+	if mock.UpdateScheduleFunc == nil {
+		panic("ClientMock.UpdateScheduleFunc: method is nil but Client.UpdateSchedule was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam       context.Context
+		UpdateScheduleRequest *xagentv1.UpdateScheduleRequest
+	}{
+		ContextMoqParam:       contextMoqParam,
+		UpdateScheduleRequest: updateScheduleRequest,
+	}
+	mock.lockUpdateSchedule.Lock()
+	mock.calls.UpdateSchedule = append(mock.calls.UpdateSchedule, callInfo)
+	mock.lockUpdateSchedule.Unlock()
+	return mock.UpdateScheduleFunc(contextMoqParam, updateScheduleRequest)
+}
+
+// UpdateScheduleCalls gets all the calls that were made to UpdateSchedule.
+// Check the length with:
+//
+//	len(mockedClient.UpdateScheduleCalls())
+func (mock *ClientMock) UpdateScheduleCalls() []struct {
+	ContextMoqParam       context.Context
+	UpdateScheduleRequest *xagentv1.UpdateScheduleRequest
+} {
+	var calls []struct {
+		ContextMoqParam       context.Context
+		UpdateScheduleRequest *xagentv1.UpdateScheduleRequest
+	}
+	mock.lockUpdateSchedule.RLock()
+	calls = mock.calls.UpdateSchedule
+	mock.lockUpdateSchedule.RUnlock()
 	return calls
 }
 

@@ -34,7 +34,7 @@ type Notification struct {
 
 // NotificationResource describes an affected resource within a "change" Notification.
 type NotificationResource struct {
-	Action string `json:"action"` // created, updated, appended
-	Type   string `json:"type"`   // task, task_events, task_links, event
+	Action string `json:"action"` // created, updated, appended, deleted
+	Type   string `json:"type"`   // task, task_events, task_links, event, schedule
 	ID     int64  `json:"id"`
 }

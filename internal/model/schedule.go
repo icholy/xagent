@@ -5,6 +5,10 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 )
 
 // cronParser is the fixed 5-field parser (minute hour day-of-month month
@@ -88,4 +92,39 @@ func (s *Schedule) Validate() error {
 		return fmt.Errorf("invalid timezone %q: %w", s.Timezone, err)
 	}
 	return nil
+}
+
+// Proto converts a Schedule to its protobuf representation. A nil next/last-run
+// timestamp (disabled or never fired) maps to an unset proto field; a nil
+// LastTaskID maps to 0 ("never run").
+func (s *Schedule) Proto() *xagentv1.Schedule {
+	instructions := make([]*xagentv1.Instruction, len(s.Instructions))
+	for i, inst := range s.Instructions {
+		instructions[i] = &xagentv1.Instruction{Text: inst.Text, Url: inst.URL}
+	}
+	pb := &xagentv1.Schedule{
+		Id:           s.ID,
+		Name:         s.Name,
+		Workspace:    s.Workspace,
+		Runner:       s.Runner,
+		Namespace:    s.Namespace,
+		Instructions: instructions,
+		CronExpr:     s.CronExpr,
+		Timezone:     s.Timezone,
+		Enabled:      s.Enabled,
+		AutoArchive:  durationpb.New(s.AutoArchive),
+		CreatedBy:    s.CreatedBy,
+		CreatedAt:    timestamppb.New(s.CreatedAt),
+		UpdatedAt:    timestamppb.New(s.UpdatedAt),
+	}
+	if s.NextRunAt != nil {
+		pb.NextRunAt = timestamppb.New(*s.NextRunAt)
+	}
+	if s.LastRunAt != nil {
+		pb.LastRunAt = timestamppb.New(*s.LastRunAt)
+	}
+	if s.LastTaskID != nil {
+		pb.LastTaskId = *s.LastTaskID
+	}
+	return pb
 }
