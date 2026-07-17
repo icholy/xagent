@@ -65,7 +65,6 @@ type Schedule struct {
 	NextRunAt    sql.NullTime    `json:"next_run_at"`
 	LastRunAt    sql.NullTime    `json:"last_run_at"`
 	LastTaskID   sql.NullInt64   `json:"last_task_id"`
-	Version      int64           `json:"version"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 }

@@ -15,7 +15,7 @@ import (
 const advanceSchedule = `-- name: AdvanceSchedule :exec
 UPDATE schedules
 SET next_run_at = $1, last_run_at = $2, last_task_id = $3,
-    version = version + 1, updated_at = (NOW() AT TIME ZONE 'UTC')
+    updated_at = (NOW() AT TIME ZONE 'UTC')
 WHERE id = $4 AND org_id = $5
 `
 
@@ -41,7 +41,7 @@ func (q *Queries) AdvanceSchedule(ctx context.Context, arg AdvanceScheduleParams
 const claimDueSchedules = `-- name: ClaimDueSchedules :many
 SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions,
        auto_archive, cron_expr, timezone, enabled,
-       next_run_at, last_run_at, last_task_id, version, created_at, updated_at
+       next_run_at, last_run_at, last_task_id, created_at, updated_at
 FROM schedules
 WHERE enabled = TRUE
   AND next_run_at IS NOT NULL
@@ -81,7 +81,6 @@ func (q *Queries) ClaimDueSchedules(ctx context.Context, limit int32) ([]Schedul
 			&i.NextRunAt,
 			&i.LastRunAt,
 			&i.LastTaskID,
-			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -99,8 +98,8 @@ func (q *Queries) ClaimDueSchedules(ctx context.Context, limit int32) ([]Schedul
 }
 
 const createSchedule = `-- name: CreateSchedule :one
-INSERT INTO schedules (org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, version, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+INSERT INTO schedules (org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 RETURNING id
 `
 
@@ -119,7 +118,6 @@ type CreateScheduleParams struct {
 	NextRunAt    sql.NullTime    `json:"next_run_at"`
 	LastRunAt    sql.NullTime    `json:"last_run_at"`
 	LastTaskID   sql.NullInt64   `json:"last_task_id"`
-	Version      int64           `json:"version"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 }
@@ -140,7 +138,6 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		arg.NextRunAt,
 		arg.LastRunAt,
 		arg.LastTaskID,
-		arg.Version,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -164,7 +161,7 @@ func (q *Queries) DeleteSchedule(ctx context.Context, arg DeleteScheduleParams) 
 }
 
 const getSchedule = `-- name: GetSchedule :one
-SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, version, created_at, updated_at
+SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, created_at, updated_at
 FROM schedules
 WHERE id = $1 AND org_id = $2
 `
@@ -193,7 +190,6 @@ func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (Sched
 		&i.NextRunAt,
 		&i.LastRunAt,
 		&i.LastTaskID,
-		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -201,7 +197,7 @@ func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (Sched
 }
 
 const getScheduleForUpdate = `-- name: GetScheduleForUpdate :one
-SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, version, created_at, updated_at
+SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, created_at, updated_at
 FROM schedules
 WHERE id = $1 AND org_id = $2
 FOR UPDATE
@@ -231,7 +227,6 @@ func (q *Queries) GetScheduleForUpdate(ctx context.Context, arg GetScheduleForUp
 		&i.NextRunAt,
 		&i.LastRunAt,
 		&i.LastTaskID,
-		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -239,7 +234,7 @@ func (q *Queries) GetScheduleForUpdate(ctx context.Context, arg GetScheduleForUp
 }
 
 const listSchedules = `-- name: ListSchedules :many
-SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, version, created_at, updated_at
+SELECT id, org_id, created_by, name, workspace, runner, namespace, instructions, auto_archive, cron_expr, timezone, enabled, next_run_at, last_run_at, last_task_id, created_at, updated_at
 FROM schedules
 WHERE org_id = $1
 ORDER BY created_at DESC
@@ -270,7 +265,6 @@ func (q *Queries) ListSchedules(ctx context.Context, orgID int64) ([]Schedule, e
 			&i.NextRunAt,
 			&i.LastRunAt,
 			&i.LastTaskID,
-			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -289,8 +283,8 @@ func (q *Queries) ListSchedules(ctx context.Context, orgID int64) ([]Schedule, e
 
 const updateSchedule = `-- name: UpdateSchedule :exec
 UPDATE schedules
-SET name = $1, workspace = $2, runner = $3, namespace = $4, instructions = $5, auto_archive = $6, cron_expr = $7, timezone = $8, enabled = $9, next_run_at = $10, last_run_at = $11, last_task_id = $12, version = $13, updated_at = $14
-WHERE id = $15 AND org_id = $16
+SET name = $1, workspace = $2, runner = $3, namespace = $4, instructions = $5, auto_archive = $6, cron_expr = $7, timezone = $8, enabled = $9, next_run_at = $10, last_run_at = $11, last_task_id = $12, updated_at = $13
+WHERE id = $14 AND org_id = $15
 `
 
 type UpdateScheduleParams struct {
@@ -306,7 +300,6 @@ type UpdateScheduleParams struct {
 	NextRunAt    sql.NullTime    `json:"next_run_at"`
 	LastRunAt    sql.NullTime    `json:"last_run_at"`
 	LastTaskID   sql.NullInt64   `json:"last_task_id"`
-	Version      int64           `json:"version"`
 	UpdatedAt    time.Time       `json:"updated_at"`
 	ID           int64           `json:"id"`
 	OrgID        int64           `json:"org_id"`
@@ -326,7 +319,6 @@ func (q *Queries) UpdateSchedule(ctx context.Context, arg UpdateScheduleParams) 
 		arg.NextRunAt,
 		arg.LastRunAt,
 		arg.LastTaskID,
-		arg.Version,
 		arg.UpdatedAt,
 		arg.ID,
 		arg.OrgID,

@@ -32,7 +32,6 @@ func (s *Store) CreateSchedule(ctx context.Context, tx *sql.Tx, sched *model.Sch
 		NextRunAt:    nullTime(sched.NextRunAt),
 		LastRunAt:    nullTime(sched.LastRunAt),
 		LastTaskID:   nullInt64(sched.LastTaskID),
-		Version:      sched.Version,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	})
@@ -94,7 +93,6 @@ func (s *Store) UpdateSchedule(ctx context.Context, tx *sql.Tx, sched *model.Sch
 		NextRunAt:    nullTime(sched.NextRunAt),
 		LastRunAt:    nullTime(sched.LastRunAt),
 		LastTaskID:   nullInt64(sched.LastTaskID),
-		Version:      sched.Version,
 		UpdatedAt:    sched.UpdatedAt,
 		ID:           sched.ID,
 		OrgID:        sched.OrgID,
@@ -180,7 +178,6 @@ func toModelSchedule(row sqlc.Schedule) (*model.Schedule, error) {
 		NextRunAt:    timePtr(row.NextRunAt),
 		LastRunAt:    timePtr(row.LastRunAt),
 		LastTaskID:   int64Ptr(row.LastTaskID),
-		Version:      row.Version,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
 	}, nil
