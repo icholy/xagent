@@ -407,8 +407,12 @@ Handlers live in a new `internal/server/apiserver/schedule.go`, authorized throu
 the org; a caller's scopes only decide whether they may *create/mutate* one. Reuse
 `OpTaskCreate` semantics: creating/updating a schedule requires the caller hold task-create
 scope for the target `(workspace, runner)` — a schedule is a deferred `CreateTask`, so setting
-one up should demand the same permission. Listing/getting/deleting a schedule is gated on org
-membership like the task read/delete ops.
+one up should demand the same permission. Deleting or toggling a schedule
+(`DeleteSchedule`/`SetScheduleEnabled`) is a mutation, gated on `OpTaskWrite` — the mutation
+tier every other write in the codebase uses (`UpdateTask`, `ArchiveTask`, `DeleteEvent`); there
+is no task-delete op, and a `task.read`-only caller must not be able to delete an org schedule
+or switch one back on. Listing/getting a schedule is gated on org membership like the task read
+op.
 
 Once created, the schedule is an org-owned object and the scheduler fires it **without any
 per-user permission check** — the same way the archiver archives with `RunnerActor`, not on
