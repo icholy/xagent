@@ -183,10 +183,10 @@ func TestScheduler_Tick_ConcurrentFiresOnce(t *testing.T) {
 
 // TestScheduler_Tick_DisablesInvalidSchedule covers the invalid-at-fire-time edge
 // case: a schedule whose timezone can no longer be resolved is disabled (enabled
-// = false, next_run_at = NULL) with a report event recorded on the fired task,
-// rather than silently wedging as permanently due. The schedule is seeded through
-// the store directly (bypassing the API's create-time Validate) to reproduce a tz
-// that has since disappeared from the tz database.
+// = false, next_run_at = NULL) rather than silently wedging as permanently due.
+// The schedule is seeded through the store directly (bypassing the API's
+// create-time Validate) to reproduce a tz that has since disappeared from the tz
+// database.
 func TestScheduler_Tick_DisablesInvalidSchedule(t *testing.T) {
 	// Not t.Parallel(): ClaimDueSchedules is server-wide (no org filter), so a tick
 	// claims every due schedule across the package. Serializing these tick tests
@@ -209,17 +209,6 @@ func TestScheduler_Tick_DisablesInvalidSchedule(t *testing.T) {
 	assert.Assert(t, !got.Enabled, "an unresolvable schedule must be disabled")
 	assert.Assert(t, got.NextRunAt == nil, "a disabled schedule must have a NULL next_run_at")
 	assert.Assert(t, got.LastTaskID != nil, "the fire that triggered the disable is still recorded")
-
-	// A report event on the fired task tells the org why the schedule stopped.
-	events, err := s.ListEventsByTask(ctx, nil, *got.LastTaskID, org.OrgID, nil)
-	assert.NilError(t, err)
-	var report *model.ReportPayload
-	for _, e := range events {
-		if p, ok := e.Payload.(*model.ReportPayload); ok {
-			report = p
-		}
-	}
-	assert.Assert(t, report != nil, "a report event must explain the disable")
 
 	// The row stays out of the due set on subsequent ticks: no further task, so
 	// the recorded last-run task is unchanged.

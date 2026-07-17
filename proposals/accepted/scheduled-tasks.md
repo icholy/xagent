@@ -343,8 +343,10 @@ time (never by adding a fixed 24h), local-time semantics hold across DST transit
   `UpdateSchedule` recomputes `next_run_at` immediately.
 
 **Invalid schedule at fire time.** If `s.Next()` errors (e.g. a timezone removed from the tz
-database), the scheduler logs, sets `enabled = FALSE` and `next_run_at = NULL`, and emits a
-report-style event so the org sees it in the UI rather than the schedule silently wedging.
+database), the due occurrence still fires — creating the task never needed `Next()`, only
+advancing did — and then the scheduler logs the cause server-side and sets `enabled = FALSE` and
+`next_run_at = NULL` so the row drops out of the claim query instead of silently wedging as
+permanently due. The reason lives in the server logs.
 
 ### API surface
 
