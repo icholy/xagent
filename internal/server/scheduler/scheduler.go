@@ -130,6 +130,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 // the tick commits.
 func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule) (model.Notification, error) {
 	now := time.Now()
+	firedAt := now.UTC()
 	// The schedule owns the template -> task/events mapping. Insert the task, then
 	// seed its events (Events needs the assigned task.ID), so a scheduled task is
 	// indistinguishable from a hand-created one downstream.
@@ -143,48 +144,34 @@ func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule)
 		}
 	}
 
-	next, err := sched.Next(now)
-	if err != nil {
+	// The task is fired either way; only the schedule write differs.
+	if next, err := sched.Next(now); err != nil {
 		// The spec was valid when written, so this only happens if the tz database
 		// dropped the schedule's timezone under us. Rather than let the row wedge as
-		// permanently due, disable it and clear next_run_at so the claim query
-		// skips it. The due occurrence still fired above — creating its task never
-		// needed Next(); only advancing did.
-		return s.disable(ctx, tx, sched, task, now, err)
+		// permanently due, disable it and clear next_run_at so the claim query skips
+		// it. The due occurrence still fired above — creating its task never needed
+		// Next(); only advancing did.
+		s.log.Error("scheduler disabling schedule with unresolvable next occurrence", "id", sched.ID, "err", err)
+		sched.Enabled = false
+		sched.NextRunAt = nil
+		sched.LastRunAt = &firedAt
+		sched.LastTaskID = &task.ID
+		if err := s.store.UpdateSchedule(ctx, tx, sched); err != nil {
+			return model.Notification{}, err
+		}
+	} else {
+		if err := s.store.AdvanceSchedule(ctx, tx, sched.ID, sched.OrgID, store.ScheduleAdvance{
+			NextRunAt:  &next,
+			LastRunAt:  &firedAt,
+			LastTaskID: &task.ID,
+		}); err != nil {
+			return model.Notification{}, err
+		}
 	}
-	firedAt := now.UTC()
-	if err := s.store.AdvanceSchedule(ctx, tx, sched.ID, sched.OrgID, store.ScheduleAdvance{
-		NextRunAt:  &next,
-		LastRunAt:  &firedAt,
-		LastTaskID: &task.ID,
-	}); err != nil {
-		return model.Notification{}, err
-	}
-	return s.taskCreatedNotification(task), nil
-}
 
-// disable turns off a schedule whose next occurrence can no longer be computed.
-// It logs the cause server-side, sets enabled=false and next_run_at=NULL so the
-// claim query skips it, and still stamps last_run_at/last_task_id with the fire
-// that just happened.
-func (s *Scheduler) disable(ctx context.Context, tx *sql.Tx, sched *model.Schedule, task *model.Task, firedAt time.Time, cause error) (model.Notification, error) {
-	s.log.Error("scheduler disabling schedule with unresolvable next occurrence", "id", sched.ID, "err", cause)
-	utc := firedAt.UTC()
-	sched.Enabled = false
-	sched.NextRunAt = nil
-	sched.LastRunAt = &utc
-	sched.LastTaskID = &task.ID
-	if err := s.store.UpdateSchedule(ctx, tx, sched); err != nil {
-		return model.Notification{}, err
-	}
-	return s.taskCreatedNotification(task), nil
-}
-
-// taskCreatedNotification is the same "change" notification the manual create
-// path emits: task created + task_events appended, with the runner set so its
-// wake channel picks the new task up immediately. There is no user, so UserID /
-// ClientID are left empty.
-func (s *Scheduler) taskCreatedNotification(task *model.Task) model.Notification {
+	// The same "change" notification the manual create path emits: task created +
+	// task_events appended, with the runner set so its wake channel picks the new
+	// task up immediately. There is no user, so UserID / ClientID are left empty.
 	return model.Notification{
 		Type: "change",
 		Resources: []model.NotificationResource{
@@ -195,7 +182,7 @@ func (s *Scheduler) taskCreatedNotification(task *model.Task) model.Notification
 		Runner:         task.PendingRunner(),
 		Time:           time.Now(),
 		ChannelMessage: fmt.Sprintf("Task %d created on %s/%s.", task.ID, task.Runner, task.Workspace),
-	}
+	}, nil
 }
 
 func (s *Scheduler) publish(ctx context.Context, n model.Notification) {
