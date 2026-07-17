@@ -141,20 +141,43 @@ func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule)
 		OrgID:       sched.OrgID,
 		AutoArchive: sched.AutoArchive,
 	}
-	instructions := make([]model.InstructionPayload, len(sched.Instructions))
-	for i, inst := range sched.Instructions {
-		instructions[i] = model.InstructionPayload(inst)
-	}
-	if err := s.store.CreateTaskWithEvents(ctx, tx, task, model.ScheduleActor, instructions); err != nil {
+	if err := s.store.CreateTask(ctx, tx, task); err != nil {
 		return model.Notification{}, err
+	}
+	// Seed the stream exactly as CreateTask does: the created event first (actor
+	// ScheduleActor, no prior status), then one wake-carrying instruction event
+	// per template instruction, so a scheduled task is indistinguishable from a
+	// hand-created one downstream.
+	if err := s.store.CreateEvent(ctx, tx, &model.Event{
+		TaskID: task.ID,
+		OrgID:  task.OrgID,
+		Payload: &model.LifecyclePayload{
+			Kind:     model.LifecycleKindCreated,
+			Actor:    model.ScheduleActor,
+			ToStatus: task.Status.Label(),
+		},
+	}); err != nil {
+		return model.Notification{}, err
+	}
+	for _, inst := range sched.Instructions {
+		payload := model.InstructionPayload(inst)
+		if err := s.store.CreateEvent(ctx, tx, &model.Event{
+			TaskID:  task.ID,
+			OrgID:   task.OrgID,
+			Wake:    true,
+			Payload: &payload,
+		}); err != nil {
+			return model.Notification{}, err
+		}
 	}
 
 	next, err := sched.Next(now)
 	if err != nil {
 		// The spec was valid when written, so this only happens if the tz database
 		// dropped the schedule's timezone under us. Rather than let the row wedge as
-		// permanently due, disable it, clear next_run_at so the claim query skips it,
-		// and record a report event on the task we just fired so the org sees why.
+		// permanently due, disable it and clear next_run_at so the claim query
+		// skips it. The due occurrence still fired above — creating its task never
+		// needed Next(); only advancing did.
 		return s.disable(ctx, tx, sched, task, now, err)
 	}
 	firedAt := now.UTC()
@@ -169,20 +192,11 @@ func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule)
 }
 
 // disable turns off a schedule whose next occurrence can no longer be computed.
-// It records the failure as a report event on the just-fired task, sets
-// enabled=false and next_run_at=NULL, and still stamps last_run_at/last_task_id
-// with the fire that just happened.
+// It logs the cause server-side, sets enabled=false and next_run_at=NULL so the
+// claim query skips it, and still stamps last_run_at/last_task_id with the fire
+// that just happened.
 func (s *Scheduler) disable(ctx context.Context, tx *sql.Tx, sched *model.Schedule, task *model.Task, firedAt time.Time, cause error) (model.Notification, error) {
 	s.log.Error("scheduler disabling schedule with unresolvable next occurrence", "id", sched.ID, "err", cause)
-	if err := s.store.CreateEvent(ctx, tx, &model.Event{
-		TaskID: task.ID,
-		OrgID:  sched.OrgID,
-		Payload: &model.ReportPayload{
-			Content: fmt.Sprintf("Schedule %d (%q) has been disabled: %v", sched.ID, sched.Name, cause),
-		},
-	}); err != nil {
-		return model.Notification{}, err
-	}
 	utc := firedAt.UTC()
 	sched.Enabled = false
 	sched.NextRunAt = nil

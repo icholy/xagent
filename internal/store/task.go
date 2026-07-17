@@ -37,46 +37,6 @@ func (s *Store) CreateTask(ctx context.Context, tx *sql.Tx, task *model.Task) er
 	return nil
 }
 
-// CreateTaskWithEvents inserts a task row and seeds its event stream the way a
-// fresh task always starts: a LifecycleKindCreated event (attributed to actor)
-// followed by one wake-carrying InstructionPayload event per instruction. It is
-// the shared core of the manual CreateTask handler and the scheduler's fire, so
-// a scheduled task is indistinguishable from a hand-created one downstream. The
-// created event is emitted before the instructions so the timeline (ordered by
-// event id) shows "Created" first. The caller supplies the transaction and
-// commits it.
-func (s *Store) CreateTaskWithEvents(ctx context.Context, tx *sql.Tx, task *model.Task, actor model.Actor, instructions []model.InstructionPayload) error {
-	if err := s.CreateTask(ctx, tx, task); err != nil {
-		return err
-	}
-	// A freshly created task has no prior status, so from is unspecified.
-	if err := s.CreateEvent(ctx, tx, &model.Event{
-		TaskID: task.ID,
-		OrgID:  task.OrgID,
-		Payload: &model.LifecyclePayload{
-			Kind:     model.LifecycleKindCreated,
-			Actor:    actor,
-			ToStatus: task.Status.Label(),
-		},
-	}); err != nil {
-		return err
-	}
-	for _, inst := range instructions {
-		if err := s.CreateEvent(ctx, tx, &model.Event{
-			TaskID: task.ID,
-			OrgID:  task.OrgID,
-			Wake:   true,
-			Payload: &model.InstructionPayload{
-				Text: inst.Text,
-				URL:  inst.URL,
-			},
-		}); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Store) GetTask(ctx context.Context, tx *sql.Tx, id int64, orgID int64) (*model.Task, error) {
 	row, err := s.q(tx).GetTask(ctx, sqlc.GetTaskParams{
 		ID:    id,
