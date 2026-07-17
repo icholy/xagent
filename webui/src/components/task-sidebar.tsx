@@ -76,17 +76,23 @@ export function TaskSidebar({
           : 'w-[300px] max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl',
       )}
     >
-      {/* header row: collapse toggle, then label + status once expanded */}
+      {/* header row: status + queued command once expanded, then collapse toggle */}
       <div
         className={cn(
           'flex h-12 shrink-0 items-center gap-2.5 border-b',
           collapsed ? 'justify-center' : 'px-3.5',
         )}
       >
+        {!collapsed && (
+          <span className="flex items-center gap-1.5">
+            <StatusBadge task={task} />
+            <CommandBadge task={task} />
+          </span>
+        )}
         <Button
           variant="outline"
           size="icon-sm"
-          className="shrink-0"
+          className={cn('shrink-0', !collapsed && 'ml-auto')}
           onClick={onToggleCollapse}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
@@ -95,16 +101,6 @@ export function TaskSidebar({
             className={cn('h-4 w-4 transition-transform duration-200', collapsed && 'rotate-180')}
           />
         </Button>
-        {!collapsed && (
-          <>
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Task
-            </span>
-            <span className="ml-auto">
-              <StatusBadge task={task} />
-            </span>
-          </>
-        )}
       </div>
 
       {/* collapsed rail keeps the status visible as a dot */}
@@ -120,9 +116,8 @@ export function TaskSidebar({
             <h1 className="text-[15px] font-semibold leading-snug text-pretty" title={title}>
               {title}
             </h1>
-            {Boolean(task.command || task.archived || task.namespace) && (
+            {Boolean(task.archived || task.namespace) && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <CommandBadge task={task} />
                 <ArchivedBadge task={task} />
                 {task.namespace && (
                   <Badge variant="secondary" title="Namespace">
