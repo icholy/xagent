@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.14.0](https://github.com/icholy/xagent/compare/v2.13.1...v2.14.0) (2026-07-17)
+
+
+### Features
+
+* **webui:** redesign task page with collapsible sidebar layout ([71eb3aa](https://github.com/icholy/xagent/commit/71eb3aaff57d44d04d91d5a556c32dae76487d01))
+
+
+### Bug Fixes
+
+* **server:** rename task_logs SSE notification to task_events ([790b011](https://github.com/icholy/xagent/commit/790b011bc576399dedca5bfabe394879b0131994))
+
+
+### Miscellaneous
+
+* **deps:** update dependency prettier to v3.9.5 ([a928cb7](https://github.com/icholy/xagent/commit/a928cb76623bc4cd72830923257068e8fe7539b2))
+
 ## [2.13.1](https://github.com/icholy/xagent/compare/v2.13.0...v2.13.1) (2026-07-13)
 
 
