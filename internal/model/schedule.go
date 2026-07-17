@@ -16,11 +16,13 @@ var cronParser = cron.NewParser(
 	cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
 
-// Instruction is a single to-agent instruction stored in a schedule's template.
-// On every occurrence it is seeded onto the new task as an InstructionPayload
+// ScheduleInstruction is a single to-agent instruction stored in a schedule's
+// template. It is structurally identical to InstructionPayload (the instruction
+// event body) but is a distinct type: a template DTO, not an event payload. On
+// every occurrence it is seeded onto the new task as an InstructionPayload
 // event, so the field names round-trip through the instructions JSONB column as
 // [{text, url}].
-type Instruction struct {
+type ScheduleInstruction struct {
 	Text string `json:"text"`
 	URL  string `json:"url,omitempty"`
 }
@@ -39,7 +41,7 @@ type Schedule struct {
 	Workspace    string        `json:"workspace"`
 	Runner       string        `json:"runner"`
 	Namespace    string        `json:"namespace,omitempty"`
-	Instructions []Instruction `json:"instructions"`
+	Instructions []ScheduleInstruction `json:"instructions"`
 	AutoArchive  time.Duration `json:"auto_archive,omitempty"`
 
 	// Schedule spec.
