@@ -106,16 +106,13 @@ export function TaskTimelineChat({
           onScroll={syncScrollState}
           className="absolute inset-0 overflow-y-auto p-6"
         >
-          {/* the timeline reads as a centered column, like a chat thread */}
-          <div className="mx-auto w-full max-w-[860px]">
-            <div ref={topSentinelRef} className="h-px" />
-            {isLoadingOlder && (
-              <div className="mb-4 flex justify-center text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-              </div>
-            )}
-            <TaskTimeline items={items} />
-          </div>
+          <div ref={topSentinelRef} className="h-px" />
+          {isLoadingOlder && (
+            <div className="mb-4 flex justify-center text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          )}
+          <TaskTimeline items={items} />
         </div>
 
         {/* Jump-to-edge buttons overlay the scroll area's top-right / bottom-right
@@ -145,11 +142,7 @@ export function TaskTimelineChat({
           </Button>
         )}
       </div>
-      {composer && (
-        <div className="shrink-0 border-t p-4">
-          <div className="mx-auto w-full max-w-[860px]">{composer}</div>
-        </div>
-      )}
+      {composer && <div className="shrink-0 border-t p-4">{composer}</div>}
     </div>
   )
 }
