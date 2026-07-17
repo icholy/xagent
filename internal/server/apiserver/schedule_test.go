@@ -216,29 +216,52 @@ func TestGetSchedule_Permissions(t *testing.T) {
 	assert.ErrorContains(t, errB, "not found")
 }
 
-// A member holding only task-read (no create scope) may still list, get, and
-// delete — the read/delete surface is gated on org membership, not create scope.
-func TestSchedule_ReadDeleteNeedOnlyMembership(t *testing.T) {
+// A member holding only task-read (no write/create scope) may list and get, but
+// read scope is not enough to mutate: delete and enable require task-write.
+func TestSchedule_ReadIsMembershipOnly(t *testing.T) {
 	t.Parallel()
 	srv := New(Options{Store: teststore.New(t)})
 	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
 
-	// Admin sets up a schedule; a read-only member operates on it.
 	created, err := srv.CreateSchedule(createCtx(t, org), &xagentv1.CreateScheduleRequest{
 		Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *",
 	})
 	assert.NilError(t, err)
-	member := scopedCtx(t, org, authscope.Scopes{authscope.New(authscope.OpTaskRead)})
+	reader := scopedCtx(t, org, authscope.Scopes{authscope.New(authscope.OpTaskRead)})
 
-	_, err = srv.GetSchedule(member, &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
+	// Read scope covers get and list.
+	_, err = srv.GetSchedule(reader, &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
 	assert.NilError(t, err)
-	list, err := srv.ListSchedules(member, &xagentv1.ListSchedulesRequest{})
+	list, err := srv.ListSchedules(reader, &xagentv1.ListSchedulesRequest{})
 	assert.NilError(t, err)
 	assert.Assert(t, cmp.Len(list.Schedules, 1))
-	_, err = srv.DeleteSchedule(member, &xagentv1.DeleteScheduleRequest{Id: created.Schedule.Id})
+
+	// ...but not the mutations.
+	_, err = srv.SetScheduleEnabled(reader, &xagentv1.SetScheduleEnabledRequest{Id: created.Schedule.Id, Enabled: true})
+	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+	_, err = srv.DeleteSchedule(reader, &xagentv1.DeleteScheduleRequest{Id: created.Schedule.Id})
+	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+}
+
+// task-write (the mutation tier) is enough to toggle and delete a schedule
+// without create scope — matching ArchiveTask/DeleteEvent.
+func TestSchedule_MutationsRequireWrite(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+
+	created, err := srv.CreateSchedule(createCtx(t, org), &xagentv1.CreateScheduleRequest{
+		Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *",
+	})
+	assert.NilError(t, err)
+	writer := scopedCtx(t, org, authscope.Scopes{authscope.New(authscope.OpTaskWrite)})
+
+	_, err = srv.SetScheduleEnabled(writer, &xagentv1.SetScheduleEnabledRequest{Id: created.Schedule.Id, Enabled: false})
+	assert.NilError(t, err)
+	_, err = srv.DeleteSchedule(writer, &xagentv1.DeleteScheduleRequest{Id: created.Schedule.Id})
 	assert.NilError(t, err)
 
-	_, err = srv.GetSchedule(member, &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
+	_, err = srv.GetSchedule(createCtx(t, org), &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
 	assert.ErrorContains(t, err, "not found")
 }
 

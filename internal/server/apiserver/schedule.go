@@ -18,10 +18,10 @@ import (
 // Schedules are org-owned objects; permissions gate the API surface, not the
 // firing (see proposals/accepted/scheduled-tasks.md §"API surface"). Creating or
 // updating a schedule is a deferred CreateTask, so it demands the same
-// task-create scope on the target (workspace, runner). Listing, getting,
-// deleting, and enabling only require org membership — expressed here as the
-// task-read capability every member holds — because they never widen what a
-// caller can run.
+// task-create scope on the target (workspace, runner). Deleting or toggling one
+// is a mutation, gated on task-write like every other mutation in the codebase
+// (there is no task-delete tier — write is it). Listing and getting only require
+// org membership, expressed as the task-read capability every member holds.
 
 func (s *Server) CreateSchedule(ctx context.Context, req *xagentv1.CreateScheduleRequest) (*xagentv1.CreateScheduleResponse, error) {
 	caller := apiauth.MustCaller(ctx)
@@ -186,7 +186,9 @@ func (s *Server) UpdateSchedule(ctx context.Context, req *xagentv1.UpdateSchedul
 
 func (s *Server) DeleteSchedule(ctx context.Context, req *xagentv1.DeleteScheduleRequest) (*xagentv1.DeleteScheduleResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	// Deleting is a mutation, gated on task-write like ArchiveTask/DeleteEvent —
+	// a read-only caller must not be able to remove an org schedule.
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot delete schedule"))
 	}
 	// DeleteSchedule is org-scoped, so a missing (or other-org) id is a no-op,
@@ -201,9 +203,10 @@ func (s *Server) DeleteSchedule(ctx context.Context, req *xagentv1.DeleteSchedul
 
 func (s *Server) SetScheduleEnabled(ctx context.Context, req *xagentv1.SetScheduleEnabledRequest) (*xagentv1.SetScheduleEnabledResponse, error) {
 	caller := apiauth.MustCaller(ctx)
-	// The one-click toolbar action: gated on org membership, not create scope,
-	// because toggling an existing schedule never widens what a caller can run.
-	if !caller.Scopes.Allow(authscope.OpTaskRead) {
+	// Toggling a schedule is a mutation — and enabling resumes firing on a target
+	// the caller may not hold create scope for — so it is gated on task-write, the
+	// mutation tier, not on read/membership.
+	if !caller.Scopes.Allow(authscope.OpTaskWrite) {
 		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot update schedule"))
 	}
 	var sched *model.Schedule
