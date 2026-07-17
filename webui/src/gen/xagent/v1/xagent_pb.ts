@@ -2909,6 +2909,10 @@ export type CreateScheduleRequest = Message<"xagent.v1.CreateScheduleRequest"> &
   timezone: string;
 
   /**
+   * enabled must be set to true for the schedule to run — there is no implicit
+   * default. A create with enabled false/unset stores an inert schedule that
+   * never fires until it is turned on via SetScheduleEnabled.
+   *
    * @generated from field: bool enabled = 8;
    */
   enabled: boolean;

@@ -393,7 +393,7 @@ message CreateScheduleRequest {
   repeated Instruction instructions = 5;
   string cron_expr = 6;
   string timezone = 7;
-  bool enabled = 8;                         // default true
+  bool enabled = 8;                         // explicit: must be true to run; false/unset stores an inert schedule
   google.protobuf.Duration auto_archive = 9;
 }
 // UpdateScheduleRequest mirrors CreateTask/UpdateTask: id + the mutable fields. Changing
