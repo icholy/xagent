@@ -98,6 +98,65 @@ func TestScheduleNext_Invalid(t *testing.T) {
 	assert.ErrorContains(t, err, "invalid timezone")
 }
 
+// TestScheduleTaskAndEvents pins the schedule -> task/events mapping a fire
+// materializes: a pending/start task carrying the template fields, then a
+// created-by-ScheduleActor event followed by one wake instruction event per
+// template instruction, in that order.
+func TestScheduleTaskAndEvents(t *testing.T) {
+	t.Parallel()
+
+	sched := &model.Schedule{
+		OrgID:       7,
+		Name:        "nightly",
+		Runner:      "r",
+		Workspace:   "w",
+		Namespace:   "ns",
+		AutoArchive: time.Hour,
+		Instructions: []model.ScheduleInstruction{
+			{Text: "bump deps", URL: "https://example.com/deps"},
+			{Text: "groom changelog"},
+		},
+	}
+
+	task := sched.Task()
+	assert.Equal(t, task.Name, "nightly")
+	assert.Equal(t, task.Runner, "r")
+	assert.Equal(t, task.Workspace, "w")
+	assert.Equal(t, task.Namespace, "ns")
+	assert.Equal(t, task.OrgID, int64(7))
+	assert.Equal(t, task.AutoArchive, time.Hour)
+	assert.Equal(t, task.Status, model.TaskStatusPending)
+	assert.Equal(t, task.Command, model.TaskCommandStart)
+	assert.Equal(t, task.Version, int64(1))
+
+	// Events reference the inserted task; simulate the id the store would assign.
+	task.ID = 42
+	events := sched.Events(task)
+	assert.Equal(t, len(events), 3)
+
+	created, ok := events[0].Payload.(*model.LifecyclePayload)
+	assert.Assert(t, ok, "first event must be a lifecycle event")
+	assert.Equal(t, created.Kind, model.LifecycleKindCreated)
+	assert.Equal(t, created.Actor, model.ScheduleActor)
+	assert.Equal(t, created.ToStatus, task.Status.Label())
+	assert.Equal(t, events[0].TaskID, int64(42))
+	assert.Equal(t, events[0].OrgID, int64(7))
+	assert.Assert(t, !events[0].Wake, "the created event does not wake")
+
+	inst1, ok := events[1].Payload.(*model.InstructionPayload)
+	assert.Assert(t, ok, "second event must be an instruction event")
+	assert.Equal(t, inst1.Text, "bump deps")
+	assert.Equal(t, inst1.URL, "https://example.com/deps")
+	assert.Assert(t, events[1].Wake, "instruction events must wake")
+	assert.Equal(t, events[1].TaskID, int64(42))
+	assert.Equal(t, events[1].OrgID, int64(7))
+
+	inst2, ok := events[2].Payload.(*model.InstructionPayload)
+	assert.Assert(t, ok, "third event must be an instruction event")
+	assert.Equal(t, inst2.Text, "groom changelog")
+	assert.Equal(t, inst2.URL, "")
+}
+
 func TestScheduleValidate(t *testing.T) {
 	t.Parallel()
 
