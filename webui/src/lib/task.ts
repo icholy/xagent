@@ -40,14 +40,16 @@ export function canOpenShell(task: TaskLike): boolean {
   }
 }
 
-// TaskTab identifies which panel of the task detail page is shown. It is mirrored
-// in the URL's ?tab= search param so panels can be deep-linked and shared.
-export type TaskTab = 'timeline' | 'shell' | 'links'
+// TaskTab identifies which view of the task detail page is shown. It is mirrored
+// in the URL's ?tab= search param so views can be deep-linked and shared. Links
+// are not a view — they live in the task sidebar.
+export type TaskTab = 'timeline' | 'shell'
 
 // toTaskTab normalizes an untrusted value (e.g. a URL search param) into a valid
-// tab, falling back to the default "timeline" panel.
+// tab, falling back to the default "timeline" view. This also swallows stale
+// ?tab=links deep links from when links were a tab.
 export function toTaskTab(value: unknown): TaskTab {
-  if (value === 'shell' || value === 'links') return value
+  if (value === 'shell') return value
   return 'timeline'
 }
 

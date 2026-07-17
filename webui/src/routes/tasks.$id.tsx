@@ -9,7 +9,6 @@ import {
   cancelTask,
   restartTask,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
-import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { useState, useRef, useLayoutEffect } from 'react'
 import type { TaskTab } from '@/lib/task'
 import { toTaskTab } from '@/lib/task'
@@ -18,32 +17,34 @@ import { useTaskTimeline } from '@/hooks/use-task-timeline'
 import { useOrgId } from '@/hooks/use-org-id'
 import { useShellState } from '@/hooks/use-shell-state'
 import { isShellActive } from '@/lib/shell-sessions'
-import { cn } from '@/lib/utils'
-import { ArchivedBadge } from '@/components/archived-badge'
-import { ArchiveButton } from '@/components/archive-button'
-import { TaskActionsMenu } from '@/components/task-actions-menu'
-import { StatusBadge } from '@/components/status-badge'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { RelativeTime } from '@/components/relative-time'
-import { CommandBadge } from '@/components/command-badge'
+import { TaskSidebar } from '@/components/task-sidebar'
 import { TaskTimelineChat } from '@/components/task-timeline-chat'
 import { TaskShellPanel } from '@/components/task-shell-panel'
-import { TaskLinksTab } from '@/components/task-links'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Send, Loader2, List, Terminal, Link2, ChevronDown } from 'lucide-react'
+import { Send, Loader2 } from 'lucide-react'
 
 export const Route = createFileRoute('/tasks/$id')({
   staticData: { orgSwitchRedirect: '/tasks' },
-  // The active panel is mirrored in ?tab= so shell/links can be deep-linked. The
+  // The active view is mirrored in ?tab= so the shell can be deep-linked. The
   // default "timeline" is left out of the URL to keep the common link clean.
-  validateSearch: (search: Record<string, unknown>): { tab?: 'shell' | 'links' } => {
+  validateSearch: (search: Record<string, unknown>): { tab?: 'shell' } => {
     const tab = toTaskTab(search.tab)
     return tab === 'timeline' ? {} : { tab }
   },
   component: TaskDetail,
 })
+
+// The sidebar collapse preference survives navigation and reloads. With nothing
+// stored yet, small screens start collapsed (an expanded sidebar would cover
+// the timeline) and larger ones expanded.
+const SIDEBAR_COLLAPSED_KEY = 'task-sidebar-collapsed'
+
+function initialSidebarCollapsed(): boolean {
+  const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+  if (stored !== null) return stored === 'true'
+  return window.matchMedia('(max-width: 767px)').matches
+}
 
 function TaskDetail() {
   const { id } = Route.useParams()
@@ -51,9 +52,9 @@ function TaskDetail() {
   const orgId = useOrgId()
   const navigate = useNavigate()
   // A shell session opened in this tab keeps the task in "running"; track it so
-  // the Shell button stays reachable (and marked active) despite that status.
+  // the Shell view stays reachable (and marked active) despite that status.
   const shellActive = isShellActive(useShellState(String(taskId)).phase)
-  // The active tab lives in the URL (?tab=) so panels can be deep-linked. The
+  // The active view lives in the URL (?tab=) so it can be deep-linked. The
   // default "timeline" is stored as an absent param, so strip it when switching.
   const tab = toTaskTab(Route.useSearch().tab)
   const setTab = (next: TaskTab) =>
@@ -64,9 +65,12 @@ function TaskDetail() {
       replace: true,
     })
   const [instruction, setInstruction] = useState('')
-  // On mobile the metadata strip collapses to just the status row; this toggles
-  // the rest (runner/workspace/created/updated). Always shown on md+.
-  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
+  const toggleSidebar = () =>
+    setSidebarCollapsed((collapsed) => {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(!collapsed))
+      return !collapsed
+    })
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-grow the composer to fit its content. Done in JS rather than relying on
@@ -155,7 +159,7 @@ function TaskDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="text-muted-foreground">Loading task...</div>
       </div>
     )
@@ -163,7 +167,7 @@ function TaskDetail() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="text-destructive">Error: {error.message}</div>
       </div>
     )
@@ -174,147 +178,40 @@ function TaskDetail() {
 
   if (!task) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="text-muted-foreground">Task not found</div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6">
-      {/* On small screens the controls wrap onto their own line below the
-          title (flex-wrap). On md+ we switch to flex-nowrap and truncate the
-          title instead, so the whole header stays on a single line with the
-          controls pinned to the right. */}
-      <div className="flex flex-wrap md:flex-nowrap justify-between items-start gap-4 mb-6">
-        {/* title shows the full name on hover, useful once it's truncated. */}
-        <h1
-          className="text-2xl font-bold md:min-w-0 md:truncate"
-          title={task.name || `Unnamed - ${id}`}
-        >
-          {task.name || `Unnamed - ${id}`}
-        </h1>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* The panel switcher rides in the header, right beside the actions
-              menu, so timeline / shell / links stay reachable from the top of
-              the page. The active tab is still mirrored in ?tab= for deep links. */}
-          <Tabs value={tab} onValueChange={(value) => setTab(value as TaskTab)}>
-            <TabsList>
-              <TabsTrigger value="timeline">
-                <List className="h-4 w-4" />
-                Timeline
-                <TabCount active={tab === 'timeline'} count={timeline.length} />
-              </TabsTrigger>
-              <TabsTrigger value="shell">
-                <Terminal className="h-4 w-4" />
-                Shell
-                {shellActive && (
-                  <span
-                    className="h-2 w-2 rounded-full bg-green-500"
-                    aria-label="Shell session active"
-                  />
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="links">
-                <Link2 className="h-4 w-4" />
-                Links
-                <TabCount active={tab === 'links'} count={links.length} />
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {/* Archive sits just left of the overflow menu as its own icon button:
-              it's the most common single-click action, so it stays one tap away
-              rather than buried in the menu. The icon flips between archive and
-              restore to match whichever action the server exposes, and it greys
-              out (rather than disappearing) when neither is available so the
-              header layout doesn't shift as the task changes state. */}
-          <ArchiveButton
-            task={task}
-            onArchive={handleArchive}
-            onUnarchive={handleUnarchive}
-            pending={archiveMutation.isPending || unarchiveMutation.isPending}
-          />
-          <TaskActionsMenu
-            task={task}
-            onAutoArchiveChange={(autoArchive) =>
-              autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
-            }
-            autoArchivePending={autoArchiveMutation.isPending}
-            onCancel={handleCancel}
-            cancelPending={cancelMutation.isPending}
-            onRestart={handleRestart}
-            restartPending={restartMutation.isPending}
-          />
-        </div>
-      </div>
+    // Sidebar + main fill the viewport below the nav; each pane scrolls on its
+    // own. `relative` anchors the expanded sidebar's small-screen overlay.
+    <div className="relative flex h-full min-h-0">
+      <TaskSidebar
+        task={task}
+        title={task.name || `Unnamed - ${id}`}
+        links={links}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+        tab={tab}
+        onTabChange={setTab}
+        timelineCount={timeline.length}
+        shellActive={shellActive}
+        onArchive={handleArchive}
+        onUnarchive={handleUnarchive}
+        archivePending={archiveMutation.isPending || unarchiveMutation.isPending}
+        onAutoArchiveChange={(autoArchive) =>
+          autoArchiveMutation.mutateAsync({ id: taskId, autoArchive })
+        }
+        autoArchivePending={autoArchiveMutation.isPending}
+        onCancel={handleCancel}
+        cancelPending={cancelMutation.isPending}
+        onRestart={handleRestart}
+        restartPending={restartMutation.isPending}
+      />
 
-      {/* Details + activity in a single card: a metadata header strip followed
-          by the selected view (timeline / shell / links). The tab switcher that
-          picks the view lives up in the page header, beside the actions menu. */}
-      <div
-        className={cn(
-          'overflow-hidden rounded-lg border',
-          tab === 'timeline' && 'flex h-[calc(100dvh-12rem)] flex-col',
-        )}
-      >
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b p-4 text-sm">
-          {/* Status row: always visible. On mobile it's the collapsed header,
-              with a chevron that expands the rest; on md+ the chevron is hidden. */}
-          <div className="flex w-full items-center gap-2 md:w-auto">
-            <span className="text-muted-foreground">Status:</span>
-            <StatusBadge task={task} />
-            <CommandBadge task={task} />
-            <ArchivedBadge task={task} />
-            {task.namespace && (
-              <Badge variant="secondary" title="Namespace">
-                {task.namespace}
-              </Badge>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-auto h-6 w-6 md:hidden"
-              onClick={() => setDetailsOpen((v) => !v)}
-              aria-label={detailsOpen ? 'Hide details' : 'Show details'}
-              aria-expanded={detailsOpen}
-            >
-              <ChevronDown
-                className={cn('h-4 w-4 transition-transform', detailsOpen && 'rotate-180')}
-              />
-            </Button>
-          </div>
-          {/* The rest: hidden on mobile until expanded, always shown on md+. */}
-          <div
-            className={cn(
-              'flex-wrap items-center gap-x-6 gap-y-2 md:flex',
-              detailsOpen ? 'flex' : 'hidden',
-            )}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Runner:</span>
-              <span>{task.runner}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Workspace:</span>
-              <span>{task.workspace}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Created:</span>
-              <span>
-                {task.createdAt ? <RelativeTime date={timestampDate(task.createdAt)} /> : '-'}
-              </span>
-            </div>
-            {task.updatedAt && (
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Updated:</span>
-                <span>
-                  <RelativeTime date={timestampDate(task.updatedAt)} />
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
+      <main className="flex min-w-0 flex-1 flex-col">
         {tab === 'timeline' && (
           <TaskTimelineChat
             items={timeline}
@@ -355,27 +252,7 @@ function TaskDetail() {
         {tab === 'shell' && (
           <TaskShellPanel taskId={taskId} orgId={orgId} canOpen={canOpenShell(task)} />
         )}
-
-        {tab === 'links' && <TaskLinksTab links={links} />}
-      </div>
+      </main>
     </div>
-  )
-}
-
-// TabCount is the small pill after a tab's label showing how many items sit
-// behind that panel (timeline entries, links). It flips to a solid fill when its
-// tab is active so it stays legible against the highlighted trigger; a zero
-// count renders nothing.
-function TabCount({ active, count }: { active: boolean; count: number }) {
-  if (count <= 0) return null
-  return (
-    <span
-      className={cn(
-        'rounded-full px-1.5 py-0.5 text-xs font-medium leading-none',
-        active ? 'bg-foreground text-background' : 'bg-background text-muted-foreground',
-      )}
-    >
-      {count}
-    </span>
   )
 }

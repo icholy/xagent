@@ -38,10 +38,14 @@ const AUTO_ARCHIVE_PRESETS: { value: string; label: string }[] = [
   { value: String(7 * 24 * 60 * 60), label: '7 days' },
 ]
 
-// TaskActionsMenu is the overflow (…) menu in the task page header. It hosts the
+// TaskActionsMenu is the task's overflow ("more actions") menu. It hosts the
 // auto-archive delay (a duration submenu) plus cancel and restart; archive and
-// unarchive live in a dedicated icon button beside this menu. Each action is
-// shown only when the server reports it as available for the task's state.
+// unarchive live in a dedicated button beside this menu. Each action is shown
+// only when the server reports it as available for the task's state.
+//
+// By default the trigger is an outline icon button; `renderTrigger` swaps in a
+// host-styled trigger (the task sidebar renders a full-width row) — it receives
+// the combined pending state so it can show its own spinner/disable itself.
 export function TaskActionsMenu({
   task,
   onAutoArchiveChange,
@@ -50,6 +54,7 @@ export function TaskActionsMenu({
   cancelPending,
   onRestart,
   restartPending,
+  renderTrigger,
 }: {
   task: ActionsTask
   onAutoArchiveChange: (autoArchive: Duration) => void
@@ -58,6 +63,7 @@ export function TaskActionsMenu({
   cancelPending?: boolean
   onRestart: () => void
   restartPending?: boolean
+  renderTrigger?: (pending: boolean) => React.ReactNode
 }) {
   const current = autoArchiveSelectValue(task.autoArchive)
   const preset = AUTO_ARCHIVE_PRESETS.find((p) => p.value === current)
@@ -67,20 +73,24 @@ export function TaskActionsMenu({
   const customLabel =
     !preset && task.autoArchive ? formatCountdown(durationToMillis(task.autoArchive)) : null
   const currentLabel = preset?.label ?? customLabel ?? 'Never'
-  const pending = autoArchivePending || cancelPending || restartPending
+  const pending = Boolean(autoArchivePending || cancelPending || restartPending)
   const showCancel = canCancelTask(task)
   const showRestart = canRestartTask(task)
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" aria-label="Task actions" disabled={pending}>
-          {pending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <MoreHorizontal className="h-4 w-4" />
-          )}
-        </Button>
+        {renderTrigger ? (
+          renderTrigger(pending)
+        ) : (
+          <Button variant="outline" size="icon" aria-label="Task actions" disabled={pending}>
+            {pending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-4 w-4" />
+            )}
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {showCancel && (

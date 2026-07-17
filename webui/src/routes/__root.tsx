@@ -109,53 +109,95 @@ function RootComponent() {
 
   return (
     <>
-      <nav className="border-b">
-        <div className="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
-          <Link to="/tasks/new" search={{ org: currentOrgId }} className="hidden md:block">
-            <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
-          </Link>
-          <div className="flex gap-2 md:gap-4">
-            <Link
-              to="/tasks"
-              search={{ org: currentOrgId }}
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Tasks
+      {/* App frame: the nav is a fixed-height bar and the routed page scrolls
+          inside <main>, so full-height pages (the task page's sidebar + pinned
+          composer) can fill the remaining viewport with h-full. */}
+      <div className="flex h-dvh flex-col">
+        <nav className="shrink-0 border-b">
+          <div className="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
+            <Link to="/tasks/new" search={{ org: currentOrgId }} className="hidden md:block">
+              <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
             </Link>
-            <Link
-              to="/events"
-              search={{ org: currentOrgId }}
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Events
-            </Link>
-            <Link
-              to="/workspaces"
-              search={{ org: currentOrgId }}
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Workspaces
-            </Link>
-            <Link
-              to="/members"
-              search={{ org: currentOrgId }}
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Members
-            </Link>
-            <Link
-              to="/keys"
-              search={{ org: currentOrgId }}
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-            >
-              Keys
-            </Link>
-          </div>
-          <div className="ml-auto flex items-center gap-4">
+            <div className="flex gap-2 md:gap-4">
+              <Link
+                to="/tasks"
+                search={{ org: currentOrgId }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              >
+                Tasks
+              </Link>
+              <Link
+                to="/events"
+                search={{ org: currentOrgId }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              >
+                Events
+              </Link>
+              <Link
+                to="/workspaces"
+                search={{ org: currentOrgId }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              >
+                Workspaces
+              </Link>
+              <Link
+                to="/members"
+                search={{ org: currentOrgId }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              >
+                Members
+              </Link>
+              <Link
+                to="/keys"
+                search={{ org: currentOrgId }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              >
+                Keys
+              </Link>
+            </div>
+            <div className="ml-auto flex items-center gap-4">
+              {orgs.length > 0 && (
+                <div className="hidden md:block">
+                  <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
+                    <SelectTrigger className="w-40 h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orgs.map((org) => (
+                        <SelectItem key={String(org.id)} value={String(org.id)}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <span className="hidden md:inline-flex">
+                <ConnectionIndicator />
+              </span>
+              <Link
+                to="/settings"
+                search={{ tab: 'account', org: currentOrgId }}
+                activeOptions={{ includeSearch: false }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+                title="Settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Link>
+              <a
+                href="/auth/logout"
+                className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-1.5"
+                title="Logout"
+                onClick={() => auth.clearToken()}
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden md:inline">Logout</span>
+              </a>
+            </div>
             {orgs.length > 0 && (
-              <div className="hidden md:block">
+              <div className="basis-full md:hidden flex items-center gap-3">
                 <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
-                  <SelectTrigger className="w-40 h-8 text-sm">
+                  <SelectTrigger className="flex-1 h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -166,50 +208,15 @@ function RootComponent() {
                     ))}
                   </SelectContent>
                 </Select>
+                <ConnectionIndicator />
               </div>
             )}
-            <span className="hidden md:inline-flex">
-              <ConnectionIndicator />
-            </span>
-            <Link
-              to="/settings"
-              search={{ tab: 'account', org: currentOrgId }}
-              activeOptions={{ includeSearch: false }}
-              className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
-              title="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Link>
-            <a
-              href="/auth/logout"
-              className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-1.5"
-              title="Logout"
-              onClick={() => auth.clearToken()}
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden md:inline">Logout</span>
-            </a>
           </div>
-          {orgs.length > 0 && (
-            <div className="basis-full md:hidden flex items-center gap-3">
-              <Select value={currentOrgId} onValueChange={handleOrgSwitch}>
-                <SelectTrigger className="flex-1 h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {orgs.map((org) => (
-                    <SelectItem key={String(org.id)} value={String(org.id)}>
-                      {org.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <ConnectionIndicator />
-            </div>
-          )}
-        </div>
-      </nav>
-      <Outlet />
+        </nav>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
       <Suspense>
         <ReactQueryDevtools buttonPosition="top-right" />
       </Suspense>

@@ -9,8 +9,9 @@ type ArchiveTask = Pick<Task, 'status' | 'actions' | 'archived' | 'autoArchive' 
 
 // useAutoArchiveCountdown returns a live-ticking, human-readable string of the
 // time until the task is auto-archived (e.g. "5m"), or null when the task isn't
-// scheduled for auto-archiving.
-function useAutoArchiveCountdown(task: ArchiveTask): string | null {
+// scheduled for auto-archiving. Exported for the task sidebar, which renders its
+// own archive row instead of this button.
+export function useAutoArchiveCountdown(task: ArchiveTask): string | null {
   const deadlineTime = autoArchiveDeadline(task)?.getTime() ?? null
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {

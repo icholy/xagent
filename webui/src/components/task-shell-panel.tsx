@@ -26,7 +26,7 @@ export function TaskShellPanel({ taskId, orgId, canOpen }: TaskShellPanelProps) 
   const openSession = () => shell.open(key, orgId)
 
   return (
-    <div className="flex h-[600px] flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {started && (
         <div className="flex items-center gap-2 border-b px-4 py-2 text-sm">
           <Terminal className="h-4 w-4 text-muted-foreground" />

@@ -26,6 +26,41 @@ const statusLabels: Record<TaskStatus, string> = {
 
 const activeStatuses = new Set([TaskStatus.RUNNING, TaskStatus.RESTARTING, TaskStatus.CANCELLING])
 
+// Dot-on-halo colors for StatusDot, keyed to match the badge palette above.
+const dotStyles: Record<TaskStatus, { halo: string; dot: string }> = {
+  [TaskStatus.UNSPECIFIED]: { halo: 'bg-gray-100', dot: 'bg-gray-400' },
+  [TaskStatus.PENDING]: { halo: 'bg-amber-100', dot: 'bg-amber-500' },
+  [TaskStatus.RUNNING]: { halo: 'bg-blue-100', dot: 'bg-blue-500' },
+  [TaskStatus.RESTARTING]: { halo: 'bg-pink-100', dot: 'bg-pink-500' },
+  [TaskStatus.CANCELLING]: { halo: 'bg-orange-100', dot: 'bg-orange-500' },
+  [TaskStatus.COMPLETED]: { halo: 'bg-green-100', dot: 'bg-green-500' },
+  [TaskStatus.FAILED]: { halo: 'bg-red-100', dot: 'bg-red-500' },
+  [TaskStatus.CANCELLED]: { halo: 'bg-amber-100', dot: 'bg-amber-500' },
+}
+
+// StatusDot is the compact form of StatusBadge for places with no room for a
+// label (the collapsed task sidebar): a colored dot on a soft halo, with the
+// status name in the tooltip. Active statuses pulse like the badge does.
+export function StatusDot({ task }: { task: Task }) {
+  const style = dotStyles[task.status] ?? dotStyles[TaskStatus.UNSPECIFIED]
+  const label = statusLabels[task.status] ?? 'unknown'
+  return (
+    <span
+      className={cn('flex h-7 w-7 items-center justify-center rounded-full', style.halo)}
+      title={`Status: ${label}`}
+      aria-label={`Status: ${label}`}
+    >
+      <span
+        className={cn(
+          'h-2.5 w-2.5 rounded-full',
+          style.dot,
+          activeStatuses.has(task.status) && 'animate-pulse',
+        )}
+      />
+    </span>
+  )
+}
+
 export function StatusBadge({ task }: { task: Task }) {
   const isActive = activeStatuses.has(task.status)
 
