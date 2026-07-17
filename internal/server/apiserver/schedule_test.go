@@ -8,7 +8,6 @@ import (
 	"github.com/icholy/xagent/internal/auth/authscope"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"gotest.tools/v3/assert"
@@ -31,7 +30,7 @@ func TestCreateSchedule(t *testing.T) {
 		},
 		CronExpr:    "0 9 * * *",
 		Timezone:    "America/Toronto",
-		Enabled:     proto.Bool(true),
+		Enabled:     true,
 		AutoArchive: durationpb.New(time.Hour),
 	})
 	assert.NilError(t, err)
@@ -78,31 +77,13 @@ func TestCreateSchedule_DisabledHasNoNextRun(t *testing.T) {
 		Workspace: "test-workspace",
 		Runner:    "test-runner",
 		CronExpr:  "0 9 * * *",
-		Enabled:   proto.Bool(false),
+		Enabled:   false,
 	})
 	assert.NilError(t, err)
 
 	// A disabled schedule stays out of the claim query: no next fire time.
 	assert.Assert(t, resp.Schedule.NextRunAt == nil)
 	assert.Assert(t, !resp.Schedule.Enabled)
-}
-
-func TestCreateSchedule_EnabledDefaultsTrue(t *testing.T) {
-	t.Parallel()
-	srv := New(Options{Store: teststore.New(t)})
-	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
-	ctx := createCtx(t, org)
-
-	// enabled is presence-tracked: omitting it defaults to true (active), so the
-	// schedule fires without a second enable call.
-	resp, err := srv.CreateSchedule(ctx, &xagentv1.CreateScheduleRequest{
-		Workspace: "test-workspace",
-		Runner:    "test-runner",
-		CronExpr:  "0 9 * * *",
-	})
-	assert.NilError(t, err)
-	assert.Assert(t, resp.Schedule.Enabled)
-	assert.Assert(t, resp.Schedule.NextRunAt != nil)
 }
 
 func TestCreateSchedule_DefaultTimezone(t *testing.T) {
@@ -269,7 +250,7 @@ func TestSetScheduleEnabled(t *testing.T) {
 
 	// Start disabled — no next fire time.
 	created, err := srv.CreateSchedule(ctx, &xagentv1.CreateScheduleRequest{
-		Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *", Enabled: proto.Bool(false),
+		Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *", Enabled: false,
 	})
 	assert.NilError(t, err)
 	assert.Assert(t, created.Schedule.NextRunAt == nil)
@@ -312,7 +293,7 @@ func TestUpdateSchedule(t *testing.T) {
 	ctx := createCtx(t, org)
 
 	created, err := srv.CreateSchedule(ctx, &xagentv1.CreateScheduleRequest{
-		Name: "original", Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: proto.Bool(true),
+		Name: "original", Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *", Timezone: "UTC", Enabled: true,
 	})
 	assert.NilError(t, err)
 	firstNext := created.Schedule.NextRunAt.AsTime()
