@@ -146,9 +146,6 @@ func (s *Server) UpdateSchedule(ctx context.Context, req *xagentv1.UpdateSchedul
 		if err != nil {
 			return err
 		}
-		// Moving the spec re-aligns the schedule to a new grid; only then does
-		// next_run_at need recomputing.
-		specChanged := existing.CronExpr != req.CronExpr || existing.Timezone != timezone
 		existing.Name = req.Name
 		existing.Workspace = req.Workspace
 		existing.Runner = req.Runner
@@ -160,10 +157,10 @@ func (s *Server) UpdateSchedule(ctx context.Context, req *xagentv1.UpdateSchedul
 		if err := existing.Validate(); err != nil {
 			return connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		// Only an enabled schedule tracks a next fire; recompute it from now when
-		// the cron/timezone moved so the edit takes effect immediately. Enable and
-		// disable stay in SetScheduleEnabled, so this never flips next_run_at on/off.
-		if existing.Enabled && specChanged {
+		// An enabled schedule re-aligns to its cron grid from now on every update,
+		// so a spec edit takes effect immediately; a disabled one keeps
+		// next_run_at = NULL (enable/disable is SetScheduleEnabled's job).
+		if existing.Enabled {
 			next, err := existing.Next(time.Now())
 			if err != nil {
 				return connect.NewError(connect.CodeInvalidArgument, err)
