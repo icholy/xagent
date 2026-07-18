@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   deleteSchedule,
   listSchedules,
+  runSchedule,
   setScheduleEnabled,
 } from '@/gen/xagent/v1/xagent-XAgentService_connectquery'
 import type { Schedule } from '@/gen/xagent/v1/xagent_pb'
@@ -26,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { nextRunLabel } from '@/lib/schedule'
 import { useOrgId } from '@/hooks/use-org-id'
 
@@ -102,6 +103,7 @@ function SchedulesPage() {
 
 function ScheduleRow({ schedule, onUpdate }: { schedule: Schedule; onUpdate: () => void }) {
   const orgId = useOrgId()
+  const navigate = useNavigate()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const enabledMutation = useMutation(setScheduleEnabled, { onSuccess: () => onUpdate() })
@@ -111,6 +113,13 @@ function ScheduleRow({ schedule, onUpdate }: { schedule: Schedule; onUpdate: () 
       onUpdate()
     },
   })
+  const runMutation = useMutation(runSchedule, {
+    onSuccess: ({ task }) => {
+      if (task) {
+        navigate({ to: '/tasks/$id', params: { id: String(task.id) }, search: { org: orgId } })
+      }
+    },
+  })
 
   const handleToggle = (enabled: boolean) => {
     enabledMutation.mutate({ id: schedule.id, enabled })
@@ -118,6 +127,10 @@ function ScheduleRow({ schedule, onUpdate }: { schedule: Schedule; onUpdate: () 
 
   const handleDelete = () => {
     deleteMutation.mutate({ id: schedule.id })
+  }
+
+  const handleRunNow = () => {
+    runMutation.mutate({ id: schedule.id })
   }
 
   return (
@@ -165,6 +178,19 @@ function ScheduleRow({ schedule, onUpdate }: { schedule: Schedule; onUpdate: () 
       </TableCell>
       <TableCell>
         <div className="flex justify-end gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRunNow}
+            disabled={runMutation.isPending}
+            aria-label="Run schedule now"
+          >
+            {runMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+          </Button>
           <Link
             to="/schedules/$id/edit"
             params={{ id: String(schedule.id) }}
