@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CRON_PRESETS, DEFAULT_CRON, browserTimezone, timezoneOptions } from '@/lib/schedule'
+import { DEFAULT_CRON, browserTimezone, timezoneOptions } from '@/lib/schedule'
 
 // ScheduleFormValues is the full editable state of a schedule template + spec.
 // It is intentionally UI-shaped: `instruction` is a single text block (the
@@ -194,19 +194,6 @@ export function ScheduleForm({
             onChange={(e) => set('cronExpr', e.target.value)}
             required
           />
-          <div className="flex flex-wrap gap-1.5">
-            {CRON_PRESETS.map((preset) => (
-              <Button
-                key={preset.value}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => set('cronExpr', preset.value)}
-              >
-                {preset.label}
-              </Button>
-            ))}
-          </div>
           <p className="text-muted-foreground text-xs">
             Standard 5-field cron (minute hour day-of-month month day-of-week) or a macro like
             @daily, @hourly, @weekly.
