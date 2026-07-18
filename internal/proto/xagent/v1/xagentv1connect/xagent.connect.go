@@ -167,6 +167,9 @@ const (
 	// XAgentServiceSetScheduleEnabledProcedure is the fully-qualified name of the XAgentService's
 	// SetScheduleEnabled RPC.
 	XAgentServiceSetScheduleEnabledProcedure = "/xagent.v1.XAgentService/SetScheduleEnabled"
+	// XAgentServiceRunScheduleProcedure is the fully-qualified name of the XAgentService's RunSchedule
+	// RPC.
+	XAgentServiceRunScheduleProcedure = "/xagent.v1.XAgentService/RunSchedule"
 )
 
 // XAgentServiceClient is a client for the xagent.v1.XAgentService service.
@@ -220,6 +223,7 @@ type XAgentServiceClient interface {
 	UpdateSchedule(context.Context, *v1.UpdateScheduleRequest) (*v1.UpdateScheduleResponse, error)
 	DeleteSchedule(context.Context, *v1.DeleteScheduleRequest) (*v1.DeleteScheduleResponse, error)
 	SetScheduleEnabled(context.Context, *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error)
+	RunSchedule(context.Context, *v1.RunScheduleRequest) (*v1.RunScheduleResponse, error)
 }
 
 // NewXAgentServiceClient constructs a client for the xagent.v1.XAgentService service. By default,
@@ -527,6 +531,12 @@ func NewXAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(xAgentServiceMethods.ByName("SetScheduleEnabled")),
 			connect.WithClientOptions(opts...),
 		),
+		runSchedule: connect.NewClient[v1.RunScheduleRequest, v1.RunScheduleResponse](
+			httpClient,
+			baseURL+XAgentServiceRunScheduleProcedure,
+			connect.WithSchema(xAgentServiceMethods.ByName("RunSchedule")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -581,6 +591,7 @@ type xAgentServiceClient struct {
 	updateSchedule                 *connect.Client[v1.UpdateScheduleRequest, v1.UpdateScheduleResponse]
 	deleteSchedule                 *connect.Client[v1.DeleteScheduleRequest, v1.DeleteScheduleResponse]
 	setScheduleEnabled             *connect.Client[v1.SetScheduleEnabledRequest, v1.SetScheduleEnabledResponse]
+	runSchedule                    *connect.Client[v1.RunScheduleRequest, v1.RunScheduleResponse]
 }
 
 // Ping calls xagent.v1.XAgentService.Ping.
@@ -1024,6 +1035,15 @@ func (c *xAgentServiceClient) SetScheduleEnabled(ctx context.Context, req *v1.Se
 	return nil, err
 }
 
+// RunSchedule calls xagent.v1.XAgentService.RunSchedule.
+func (c *xAgentServiceClient) RunSchedule(ctx context.Context, req *v1.RunScheduleRequest) (*v1.RunScheduleResponse, error) {
+	response, err := c.runSchedule.CallUnary(ctx, connect.NewRequest(req))
+	if response != nil {
+		return response.Msg, err
+	}
+	return nil, err
+}
+
 // XAgentServiceHandler is an implementation of the xagent.v1.XAgentService service.
 type XAgentServiceHandler interface {
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
@@ -1075,6 +1095,7 @@ type XAgentServiceHandler interface {
 	UpdateSchedule(context.Context, *v1.UpdateScheduleRequest) (*v1.UpdateScheduleResponse, error)
 	DeleteSchedule(context.Context, *v1.DeleteScheduleRequest) (*v1.DeleteScheduleResponse, error)
 	SetScheduleEnabled(context.Context, *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error)
+	RunSchedule(context.Context, *v1.RunScheduleRequest) (*v1.RunScheduleResponse, error)
 }
 
 // NewXAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1378,6 +1399,12 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(xAgentServiceMethods.ByName("SetScheduleEnabled")),
 		connect.WithHandlerOptions(opts...),
 	)
+	xAgentServiceRunScheduleHandler := connect.NewUnaryHandlerSimple(
+		XAgentServiceRunScheduleProcedure,
+		svc.RunSchedule,
+		connect.WithSchema(xAgentServiceMethods.ByName("RunSchedule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/xagent.v1.XAgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case XAgentServicePingProcedure:
@@ -1478,6 +1505,8 @@ func NewXAgentServiceHandler(svc XAgentServiceHandler, opts ...connect.HandlerOp
 			xAgentServiceDeleteScheduleHandler.ServeHTTP(w, r)
 		case XAgentServiceSetScheduleEnabledProcedure:
 			xAgentServiceSetScheduleEnabledHandler.ServeHTTP(w, r)
+		case XAgentServiceRunScheduleProcedure:
+			xAgentServiceRunScheduleHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1681,4 +1710,8 @@ func (UnimplementedXAgentServiceHandler) DeleteSchedule(context.Context, *v1.Del
 
 func (UnimplementedXAgentServiceHandler) SetScheduleEnabled(context.Context, *v1.SetScheduleEnabledRequest) (*v1.SetScheduleEnabledResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.SetScheduleEnabled is not implemented"))
+}
+
+func (UnimplementedXAgentServiceHandler) RunSchedule(context.Context, *v1.RunScheduleRequest) (*v1.RunScheduleResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("xagent.v1.XAgentService.RunSchedule is not implemented"))
 }

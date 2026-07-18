@@ -136,6 +136,9 @@ var _ Client = &ClientMock{}
 //			RestartTaskFunc: func(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error) {
 //				panic("mock out the RestartTask method")
 //			},
+//			RunScheduleFunc: func(contextMoqParam context.Context, runScheduleRequest *xagentv1.RunScheduleRequest) (*xagentv1.RunScheduleResponse, error) {
+//				panic("mock out the RunSchedule method")
+//			},
 //			SetRoutingRulesFunc: func(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error) {
 //				panic("mock out the SetRoutingRules method")
 //			},
@@ -289,6 +292,9 @@ type ClientMock struct {
 
 	// RestartTaskFunc mocks the RestartTask method.
 	RestartTaskFunc func(contextMoqParam context.Context, restartTaskRequest *xagentv1.RestartTaskRequest) (*xagentv1.RestartTaskResponse, error)
+
+	// RunScheduleFunc mocks the RunSchedule method.
+	RunScheduleFunc func(contextMoqParam context.Context, runScheduleRequest *xagentv1.RunScheduleRequest) (*xagentv1.RunScheduleResponse, error)
 
 	// SetRoutingRulesFunc mocks the SetRoutingRules method.
 	SetRoutingRulesFunc func(contextMoqParam context.Context, setRoutingRulesRequest *xagentv1.SetRoutingRulesRequest) (*xagentv1.SetRoutingRulesResponse, error)
@@ -595,6 +601,13 @@ type ClientMock struct {
 			// RestartTaskRequest is the restartTaskRequest argument value.
 			RestartTaskRequest *xagentv1.RestartTaskRequest
 		}
+		// RunSchedule holds details about calls to the RunSchedule method.
+		RunSchedule []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// RunScheduleRequest is the runScheduleRequest argument value.
+			RunScheduleRequest *xagentv1.RunScheduleRequest
+		}
 		// SetRoutingRules holds details about calls to the SetRoutingRules method.
 		SetRoutingRules []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -705,6 +718,7 @@ type ClientMock struct {
 	lockRegisterWorkspaces             sync.RWMutex
 	lockRemoveOrgMember                sync.RWMutex
 	lockRestartTask                    sync.RWMutex
+	lockRunSchedule                    sync.RWMutex
 	lockSetRoutingRules                sync.RWMutex
 	lockSetScheduleEnabled             sync.RWMutex
 	lockSubmitRunnerEvents             sync.RWMutex
@@ -2118,6 +2132,42 @@ func (mock *ClientMock) RestartTaskCalls() []struct {
 	mock.lockRestartTask.RLock()
 	calls = mock.calls.RestartTask
 	mock.lockRestartTask.RUnlock()
+	return calls
+}
+
+// RunSchedule calls RunScheduleFunc.
+func (mock *ClientMock) RunSchedule(contextMoqParam context.Context, runScheduleRequest *xagentv1.RunScheduleRequest) (*xagentv1.RunScheduleResponse, error) {
+	if mock.RunScheduleFunc == nil {
+		panic("ClientMock.RunScheduleFunc: method is nil but Client.RunSchedule was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam    context.Context
+		RunScheduleRequest *xagentv1.RunScheduleRequest
+	}{
+		ContextMoqParam:    contextMoqParam,
+		RunScheduleRequest: runScheduleRequest,
+	}
+	mock.lockRunSchedule.Lock()
+	mock.calls.RunSchedule = append(mock.calls.RunSchedule, callInfo)
+	mock.lockRunSchedule.Unlock()
+	return mock.RunScheduleFunc(contextMoqParam, runScheduleRequest)
+}
+
+// RunScheduleCalls gets all the calls that were made to RunSchedule.
+// Check the length with:
+//
+//	len(mockedClient.RunScheduleCalls())
+func (mock *ClientMock) RunScheduleCalls() []struct {
+	ContextMoqParam    context.Context
+	RunScheduleRequest *xagentv1.RunScheduleRequest
+} {
+	var calls []struct {
+		ContextMoqParam    context.Context
+		RunScheduleRequest *xagentv1.RunScheduleRequest
+	}
+	mock.lockRunSchedule.RLock()
+	calls = mock.calls.RunSchedule
+	mock.lockRunSchedule.RUnlock()
 	return calls
 }
 

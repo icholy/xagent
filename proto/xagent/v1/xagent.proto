@@ -57,6 +57,7 @@ service XAgentService {
   rpc UpdateSchedule(UpdateScheduleRequest) returns (UpdateScheduleResponse);
   rpc DeleteSchedule(DeleteScheduleRequest) returns (DeleteScheduleResponse);
   rpc SetScheduleEnabled(SetScheduleEnabledRequest) returns (SetScheduleEnabledResponse);
+  rpc RunSchedule(RunScheduleRequest) returns (RunScheduleResponse);
 }
 
 message PingRequest {}
@@ -838,4 +839,18 @@ message SetScheduleEnabledRequest {
 
 message SetScheduleEnabledResponse {
   Schedule schedule = 1;
+}
+
+// RunScheduleRequest fires a schedule immediately as a one-off, in addition to
+// its cron cadence. It records nothing on the schedule row — next_run_at,
+// last_run_at, and last_task_id are all left untouched; the row stays purely
+// about the cron cadence. Allowed on a disabled schedule — a disabled schedule
+// only means "don't fire automatically," and testing a not-yet-enabled schedule
+// is the primary use case.
+message RunScheduleRequest {
+  int64 id = 1;
+}
+
+message RunScheduleResponse {
+  Task task = 1;  // the task the manual run created — for the UI to link to
 }

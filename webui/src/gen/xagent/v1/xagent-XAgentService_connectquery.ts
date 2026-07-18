@@ -248,3 +248,8 @@ export const deleteSchedule = XAgentService.method.deleteSchedule;
  * @generated from rpc xagent.v1.XAgentService.SetScheduleEnabled
  */
 export const setScheduleEnabled = XAgentService.method.setScheduleEnabled;
+
+/**
+ * @generated from rpc xagent.v1.XAgentService.RunSchedule
+ */
+export const runSchedule = XAgentService.method.runSchedule;
