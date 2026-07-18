@@ -1,17 +1,6 @@
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import type { Timestamp } from '@bufbuild/protobuf/wkt'
 
-// Common cron presets surfaced as quick-fill buttons under the cron field. The
-// server is the source of truth for validation (standard 5-field cron plus the
-// @daily/@hourly/... macros); these are just conveniences for the common cases.
-export const CRON_PRESETS: { label: string; value: string }[] = [
-  { label: 'Every hour', value: '@hourly' },
-  { label: 'Every day at 09:00', value: '0 9 * * *' },
-  { label: 'Weekdays at 09:00', value: '0 9 * * 1-5' },
-  { label: 'Every Monday at 09:00', value: '0 9 * * 1' },
-  { label: 'First of the month', value: '@monthly' },
-]
-
 // DEFAULT_CRON is what a fresh create form starts with — a valid, unsurprising
 // daily schedule the user can adjust.
 export const DEFAULT_CRON = '0 9 * * *'
