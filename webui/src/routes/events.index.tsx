@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   getEventTypes,
@@ -11,14 +11,6 @@ import type { Event, RoutingRule } from '@/gen/xagent/v1/xagent_pb'
 import { timestampDate } from '@bufbuild/protobuf/wkt'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -34,30 +26,107 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RelativeTime } from '@/components/relative-time'
 import { eventTypeLabel, OP_LABELS, type ConditionOp } from '@/lib/routing-rules'
 import { ChevronDown, ChevronUp, FlaskConical, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useOrgId } from '@/hooks/use-org-id'
 
+type EventsTab = 'rules' | 'recent'
+
+function toEventsTab(value: unknown): EventsTab | undefined {
+  if (value === 'rules' || value === 'recent') return value
+  return undefined
+}
+
 export const Route = createFileRoute('/events/')({
   staticData: { orgSwitchRedirect: '/events' },
+  validateSearch: (search: Record<string, unknown>): { tab?: EventsTab } => ({
+    tab: toEventsTab(search.tab),
+  }),
   component: EventsPage,
 })
 
 function EventsPage() {
+  const tab = Route.useSearch().tab ?? 'rules'
+  const orgId = useOrgId()
+  const navigate = useNavigate()
+  const [limit, setLimit] = useState(25)
+
+  const { data: rulesData } = useQuery(getRoutingRules, {})
+  const ruleCount = rulesData?.rules.length
+
   return (
-    <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6">Events</h1>
-      <div className="space-y-6">
-        <RoutingRulesCard />
-        <RecentEventsCard />
-      </div>
+    <div className="px-4 md:px-8 py-6">
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          navigate({
+            to: '/events',
+            search: { tab: toEventsTab(value), org: orgId },
+            replace: true,
+          })
+        }
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <TabsList>
+            <TabsTrigger value="rules">
+              Routing Rules
+              {ruleCount !== undefined && (
+                <span className="rounded-full bg-muted-foreground/15 px-1.5 text-xs tabular-nums">
+                  {ruleCount}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="recent">Recent Events</TabsTrigger>
+          </TabsList>
+          <div className="ml-auto flex items-center gap-2">
+            {tab === 'rules' && (
+              <>
+                <Link to="/routing/testevent" search={{ org: orgId }}>
+                  <Button variant="outline">
+                    <FlaskConical className="h-4 w-4" />
+                    Test
+                  </Button>
+                </Link>
+                <Link to="/routing/new" search={{ org: orgId }}>
+                  <Button>
+                    <Plus className="h-4 w-4" />
+                    Rule
+                  </Button>
+                </Link>
+              </>
+            )}
+            {tab === 'recent' && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Show</span>
+                <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="75">75</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+        <TabsContent value="rules" className="pt-2">
+          <RoutingRulesTab />
+        </TabsContent>
+        <TabsContent value="recent" className="pt-2">
+          <RecentEventsTab limit={limit} />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
 
-function RecentEventsCard() {
-  const [limit, setLimit] = useState(25)
+function RecentEventsTab({ limit }: { limit: number }) {
   const { data, isLoading, error } = useQuery(
     listExternalEvents,
     { limit },
@@ -66,57 +135,28 @@ function RecentEventsCard() {
 
   const events = data?.events ?? []
 
+  if (isLoading) return <div className="text-muted-foreground">Loading...</div>
+  if (error) return <div className="text-destructive">Error: {error.message}</div>
+  if (events.length === 0) {
+    return <div className="text-muted-foreground text-center py-8">No events found</div>
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <CardTitle>Recent Events</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show</span>
-              <Select value={String(limit)} onValueChange={(value) => setLimit(Number(value))}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="75">75</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
-        ) : error ? (
-          <div className="text-destructive">Error: {error.message}</div>
-        ) : events.length === 0 ? (
-          <div className="text-muted-foreground text-center py-8">No events found</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="hidden md:table-cell">ID</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="hidden md:table-cell">Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {events.map((event) => (
-                <EventRow key={String(event.id)} event={event} />
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="hidden md:table-cell">ID</TableHead>
+          <TableHead>Description</TableHead>
+          <TableHead>Data</TableHead>
+          <TableHead className="hidden md:table-cell">Created</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {events.map((event) => (
+          <EventRow key={String(event.id)} event={event} />
+        ))}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -171,7 +211,7 @@ function ruleMatchBadges(rule: RoutingRule): string[] {
   })
 }
 
-function RoutingRulesCard() {
+function RoutingRulesTab() {
   const orgId = useOrgId()
   const { data, isLoading, refetch } = useQuery(
     getRoutingRules,
@@ -202,125 +242,102 @@ function RoutingRulesCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Routing Rules</CardTitle>
-        <CardDescription>
-          Configure how events get routed to tasks and workspaces. Rules are evaluated top to
-          bottom; the first match wins.
-        </CardDescription>
-        <CardAction>
-          <div className="flex gap-2">
-            <Link to="/routing/testevent" search={{ org: orgId }}>
-              <Button variant="outline">
-                <FlaskConical className="h-4 w-4" />
-                Test
-              </Button>
-            </Link>
-            <Link to="/routing/new" search={{ org: orgId }}>
-              <Button>
-                <Plus className="h-4 w-4" />
-                Rule
-              </Button>
-            </Link>
-          </div>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {updateMutation.error && (
-          <div className="text-destructive text-sm">{updateMutation.error.message}</div>
-        )}
-        {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
-        ) : rules.length === 0 ? (
-          <div className="text-muted-foreground text-center py-8">No routing rules configured</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event Type</TableHead>
-                <TableHead className="hidden md:table-cell">Filters</TableHead>
-                <TableHead className="hidden md:table-cell">Action</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rules.map((rule, index) => (
-                <TableRow key={index}>
-                  <TableCell className="font-medium whitespace-nowrap">
-                    {eventTypeLabel(eventTypes, rule.source, rule.type)}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1">
-                      {ruleMatchBadges(rule).map((label) => (
-                        <Badge
-                          key={label}
-                          variant="outline"
-                          className="font-mono max-w-full truncate"
-                        >
-                          {label}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1">
-                      {rule.wakeup && <Badge variant="secondary">wake</Badge>}
-                      {rule.create && <Badge variant="secondary">create</Badge>}
-                      {!rule.wakeup && !rule.create && (
-                        <span className="text-muted-foreground whitespace-nowrap">None</span>
+    <div className="space-y-4">
+      {updateMutation.error && (
+        <div className="text-destructive text-sm">{updateMutation.error.message}</div>
+      )}
+      {isLoading ? (
+        <div className="text-muted-foreground">Loading...</div>
+      ) : rules.length === 0 ? (
+        <div className="text-muted-foreground text-center py-8">
+          No routing rules configured. Rules are evaluated top to bottom; the first match wins.
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Event Type</TableHead>
+              <TableHead className="hidden md:table-cell">Filters</TableHead>
+              <TableHead className="hidden md:table-cell">Action</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rules.map((rule, index) => (
+              <TableRow key={index}>
+                <TableCell className="font-medium whitespace-nowrap">
+                  {eventTypeLabel(eventTypes, rule.source, rule.type)}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex flex-wrap gap-1">
+                    {ruleMatchBadges(rule).map((label) => (
+                      <Badge
+                        key={label}
+                        variant="outline"
+                        className="font-mono max-w-full truncate"
+                      >
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex flex-wrap gap-1">
+                    {rule.wakeup && <Badge variant="secondary">wake</Badge>}
+                    {rule.create && <Badge variant="secondary">create</Badge>}
+                    {!rule.wakeup && !rule.create && (
+                      <span className="text-muted-foreground whitespace-nowrap">None</span>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleMove(index, -1)}
+                      disabled={updateMutation.isPending || index === 0}
+                      aria-label="Move rule up"
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleMove(index, 1)}
+                      disabled={updateMutation.isPending || index === rules.length - 1}
+                      aria-label="Move rule down"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    <Link
+                      to="/routing/$index"
+                      params={{ index: String(index) }}
+                      search={{ org: orgId }}
+                    >
+                      <Button variant="outline" size="sm" disabled={updateMutation.isPending}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDelete(index)}
+                      disabled={updateMutation.isPending}
+                    >
+                      {updateMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMove(index, -1)}
-                        disabled={updateMutation.isPending || index === 0}
-                        aria-label="Move rule up"
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMove(index, 1)}
-                        disabled={updateMutation.isPending || index === rules.length - 1}
-                        aria-label="Move rule down"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                      <Link
-                        to="/routing/$index"
-                        params={{ index: String(index) }}
-                        search={{ org: orgId }}
-                      >
-                        <Button variant="outline" size="sm" disabled={updateMutation.isPending}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(index)}
-                        disabled={updateMutation.isPending}
-                      >
-                        {updateMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
   )
 }
