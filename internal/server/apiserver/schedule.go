@@ -13,6 +13,7 @@ import (
 	"github.com/icholy/xagent/internal/auth/authscope"
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
+	"github.com/icholy/xagent/internal/server/scheduler"
 )
 
 // Schedules are org-owned objects; permissions gate the API surface, not the
@@ -272,4 +273,69 @@ func (s *Server) SetScheduleEnabled(ctx context.Context, req *xagentv1.SetSchedu
 		Time:      time.Now(),
 	})
 	return &xagentv1.SetScheduleEnabledResponse{Schedule: sched.Proto()}, nil
+}
+
+// RunSchedule fires a schedule immediately as a one-off, in addition to its cron
+// cadence. It materializes the exact same task the scheduler worker would (via
+// scheduler.Fire) and records NOTHING on the schedule row — next_run_at,
+// last_run_at, and last_task_id stay untouched, so the extra run never disturbs
+// the cadence. It works even on a disabled schedule (a disabled schedule only
+// means "don't fire automatically"), which is the primary "test right after
+// creating" use case.
+func (s *Server) RunSchedule(ctx context.Context, req *xagentv1.RunScheduleRequest) (*xagentv1.RunScheduleResponse, error) {
+	caller := apiauth.MustCaller(ctx)
+	// Coarse, fail-fast capability gate (AllowOp ignores predicates) so an
+	// empty-scopes caller is denied before any store access; the concrete
+	// per-target check happens after the row is loaded, below.
+	if !caller.Scopes.AllowOp(authscope.OpTaskCreate) {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("cannot run schedule"))
+	}
+	var (
+		task *model.Task
+		note model.Notification
+	)
+	err := s.store.WithTx(ctx, nil, func(tx *sql.Tx) error {
+		// No FOR UPDATE: nothing is written back to the schedule row, so a plain
+		// org-scoped read suffices.
+		sched, err := s.store.GetSchedule(ctx, tx, req.Id, caller.OrgID)
+		if err != nil {
+			return err
+		}
+		// A manual run materializes a real task on the schedule's target, so it
+		// demands the same task-create scope CreateSchedule/UpdateSchedule require —
+		// stronger than the task-write tier used for enable/disable. The target is
+		// read from the row, not the request, so it can't be spoofed.
+		if !caller.Scopes.Allow(authscope.OpTaskCreate,
+			authscope.WithTaskWorkspace(sched.Workspace),
+			authscope.WithTaskRunner(sched.Runner),
+			authscope.WithTaskArchived(false),
+		) {
+			return connect.NewError(connect.CodePermissionDenied, errors.New("cannot run schedule"))
+		}
+		// Same occurrence the scheduler worker fires — identical task and events —
+		// and nothing else. The schedule row is untouched, so a manual run works
+		// even on a disabled schedule or one whose cron/timezone later became invalid
+		// (this path never computes Next()).
+		task, note, err = scheduler.Fire(ctx, tx, s.store, sched)
+		if err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		if connect.CodeOf(err) != connect.CodeUnknown {
+			return nil, err
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("schedule %d not found", req.Id))
+		}
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	s.log.InfoContext(ctx, "schedule run manually", "id", req.Id, "task", task.ID)
+	// Publish the same task-created notification the scheduler and CreateTask emit,
+	// AFTER commit, so the runner wake channel and Web UI never see a rolled-back
+	// task. Fire built it with Runner set; stamp in the acting user for the SSE fan-out.
+	note.UserID, note.ClientID = caller.ID, caller.ClientID
+	s.publish(note)
+	return &xagentv1.RunScheduleResponse{Task: task.Proto(s.baseURL)}, nil
 }

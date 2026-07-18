@@ -6,6 +6,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/icholy/xagent/internal/auth/authscope"
+	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -358,4 +359,173 @@ func TestUpdateSchedule_InvalidCron(t *testing.T) {
 	getResp, err := srv.GetSchedule(ctx, &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
 	assert.NilError(t, err)
 	assert.Equal(t, getResp.Schedule.CronExpr, "0 9 * * *")
+}
+
+// A manual run fires the schedule as a one-off: it creates exactly one task
+// carrying the template, seeds the ScheduleActor created-event + one instruction
+// event per instruction (byte-for-byte what the scheduler worker fires), and
+// records nothing on the schedule row — next_run_at/last_run_at/last_task_id all
+// stay untouched so the cron cadence never advances.
+func TestRunSchedule(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	created, err := srv.CreateSchedule(ctx, &xagentv1.CreateScheduleRequest{
+		Name:      "nightly",
+		Workspace: "test-workspace",
+		Runner:    "test-runner",
+		Namespace: "reviewbot",
+		Instructions: []*xagentv1.Instruction{
+			{Text: "bump deps", Url: "https://example.com/deps"},
+			{Text: "groom changelog"},
+		},
+		CronExpr: "0 9 * * *",
+		Timezone: "UTC",
+		Enabled:  true,
+	})
+	assert.NilError(t, err)
+
+	// Snapshot the cadence columns before the manual run so we can prove they are
+	// left untouched. An enabled schedule has a next_run_at; it never ran, so
+	// last_run_at/last_task_id are unset.
+	before := created.Schedule
+	assert.Assert(t, before.NextRunAt != nil)
+	assert.Assert(t, before.LastRunAt == nil)
+	assert.Equal(t, before.LastTaskId, int64(0))
+
+	resp, err := srv.RunSchedule(ctx, &xagentv1.RunScheduleRequest{Id: created.Schedule.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, resp.Task != nil)
+	assert.Assert(t, resp.Task.Id != 0)
+
+	// Exactly one task was created for the org, and it is the one returned.
+	tasks, err := srv.store.ListTasks(ctx, nil, org.OrgID)
+	assert.NilError(t, err)
+	assert.Assert(t, cmp.Len(tasks, 1))
+	assert.Equal(t, tasks[0].ID, resp.Task.Id)
+	assert.Equal(t, tasks[0].Name, "nightly")
+	assert.Equal(t, tasks[0].Workspace, "test-workspace")
+	assert.Equal(t, tasks[0].Runner, "test-runner")
+
+	// The created event first (ScheduleActor), then one wake instruction event per
+	// template instruction — identical to a scheduled fire.
+	events, err := srv.store.ListEventsByTask(ctx, nil, resp.Task.Id, org.OrgID, nil)
+	assert.NilError(t, err)
+	assert.DeepEqual(t, eventShapes(events), []eventShape{
+		{Payload: &model.LifecyclePayload{
+			Kind:     model.LifecycleKindCreated,
+			Actor:    model.ScheduleActor,
+			ToStatus: model.TaskStatusPending.Label(),
+		}},
+		{Wake: true, Payload: &model.InstructionPayload{Text: "bump deps", URL: "https://example.com/deps"}},
+		{Wake: true, Payload: &model.InstructionPayload{Text: "groom changelog"}},
+	})
+
+	// The schedule row is untouched: the cron cadence never advanced and no run was
+	// recorded on it. created_at/updated_at are ignored — the create response carries
+	// the in-memory time at full precision, while the read-back is truncated to
+	// Postgres's microsecond resolution (same as TestCreateSchedule).
+	after, err := srv.GetSchedule(ctx, &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
+	assert.NilError(t, err)
+	assert.DeepEqual(t, after.Schedule, before, protocmp.Transform(),
+		protocmp.IgnoreFields(&xagentv1.Schedule{}, "created_at", "updated_at"))
+}
+
+// A manual run works on a disabled schedule — disabled only means "don't fire
+// automatically," and testing a not-yet-enabled schedule is the primary use case.
+// The row stays disabled with next_run_at unset afterward.
+func TestRunSchedule_DisabledSchedule(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	created, err := srv.CreateSchedule(ctx, &xagentv1.CreateScheduleRequest{
+		Name:         "inert",
+		Workspace:    "test-workspace",
+		Runner:       "test-runner",
+		Instructions: []*xagentv1.Instruction{{Text: "smoke test"}},
+		CronExpr:     "0 9 * * *",
+		Enabled:      false,
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, created.Schedule.NextRunAt == nil)
+
+	resp, err := srv.RunSchedule(ctx, &xagentv1.RunScheduleRequest{Id: created.Schedule.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, resp.Task != nil)
+
+	// Running it never re-enabled the row or gave it a next fire time.
+	after, err := srv.GetSchedule(ctx, &xagentv1.GetScheduleRequest{Id: created.Schedule.Id})
+	assert.NilError(t, err)
+	assert.Assert(t, !after.Schedule.Enabled)
+	assert.Assert(t, after.Schedule.NextRunAt == nil)
+	assert.Assert(t, after.Schedule.LastRunAt == nil)
+	assert.Equal(t, after.Schedule.LastTaskId, int64(0))
+}
+
+// A manual run materializes a real task on the schedule's target, so it demands
+// the same task-create scope CreateSchedule/UpdateSchedule require — the
+// task-write mutation tier (enough to enable/disable) is not sufficient. The
+// target is read from the schedule row, so it can't be spoofed by the request.
+func TestRunSchedule_RequiresCreateScope(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+
+	created, err := srv.CreateSchedule(createCtx(t, org), &xagentv1.CreateScheduleRequest{
+		Workspace: "test-workspace", Runner: "test-runner", CronExpr: "0 9 * * *",
+	})
+	assert.NilError(t, err)
+
+	// task-write (the tier that toggles/deletes a schedule) is not enough to fire it.
+	writer := scopedCtx(t, org, authscope.Scopes{authscope.New(authscope.OpTaskWrite)})
+	_, err = srv.RunSchedule(writer, &xagentv1.RunScheduleRequest{Id: created.Schedule.Id})
+	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+
+	// Create scope for a different target does not grant a run on this one.
+	wrongTarget := scopedCtx(t, org, authscope.Scopes{authscope.New(authscope.OpTaskCreate,
+		authscope.WithTaskWorkspace("other-workspace"),
+		authscope.WithTaskRunner("test-runner"),
+		authscope.WithTaskArchived(false),
+	)})
+	_, err = srv.RunSchedule(wrongTarget, &xagentv1.RunScheduleRequest{Id: created.Schedule.Id})
+	assert.Equal(t, connect.CodeOf(err), connect.CodePermissionDenied)
+
+	// Create scope on the schedule's own (workspace, runner) may run it.
+	creator := scopedCtx(t, org, authscope.Scopes{authscope.New(authscope.OpTaskCreate,
+		authscope.WithTaskWorkspace("test-workspace"),
+		authscope.WithTaskRunner("test-runner"),
+		authscope.WithTaskArchived(false),
+	)})
+	_, err = srv.RunSchedule(creator, &xagentv1.RunScheduleRequest{Id: created.Schedule.Id})
+	assert.NilError(t, err)
+}
+
+func TestRunSchedule_NotFound(t *testing.T) {
+	t.Parallel()
+	srv := New(Options{Store: teststore.New(t)})
+	org := teststore.CreateOrg(t, srv.store, &teststore.OrgOptions{Workspaces: []teststore.WorkspaceOptions{{RunnerID: "test-runner", Name: "test-workspace"}}})
+	ctx := createCtx(t, org)
+
+	_, err := srv.RunSchedule(ctx, &xagentv1.RunScheduleRequest{Id: 999})
+	assert.Equal(t, connect.CodeOf(err), connect.CodeNotFound)
+}
+
+// eventShape is the identity-independent projection of an event used to assert on
+// seeded events: only Wake + Payload, dropping the DB-assigned id/task_id/org_id
+// and timestamp.
+type eventShape struct {
+	Wake    bool
+	Payload model.EventPayload
+}
+
+func eventShapes(events []*model.Event) []eventShape {
+	shapes := make([]eventShape, len(events))
+	for i, e := range events {
+		shapes[i] = eventShape{Wake: e.Wake, Payload: e.Payload}
+	}
+	return shapes
 }
