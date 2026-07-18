@@ -2,26 +2,49 @@ import { timestampDate } from '@bufbuild/protobuf/wkt'
 import type { Duration } from '@bufbuild/protobuf/wkt'
 import type { Task, TaskLink } from '@/gen/xagent/v1/xagent_pb'
 import type { TaskTab } from '@/lib/task'
-import { canArchiveTask, canUnarchiveTask } from '@/lib/task'
+import {
+  canArchiveTask,
+  canCancelTask,
+  canRestartTask,
+  canUnarchiveTask,
+  isArchivedTask,
+} from '@/lib/task'
+import {
+  AUTO_ARCHIVE_IMMEDIATE,
+  AUTO_ARCHIVE_NEVER,
+  autoArchiveSelectValue,
+  durationFromAutoArchiveSelect,
+  durationToMillis,
+  formatCountdown,
+} from '@/lib/duration'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { StatusBadge, StatusDot } from '@/components/status-badge'
 import { ArchivedBadge } from '@/components/archived-badge'
 import { CommandBadge } from '@/components/command-badge'
 import { RelativeTime } from '@/components/relative-time'
-import { TaskActionsMenu } from '@/components/task-actions-menu'
 import { TaskLinks } from '@/components/task-links'
 import { useAutoArchiveCountdown } from '@/components/archive-button'
 import {
   Archive,
   ArchiveRestore,
+  Ban,
   ChevronLeft,
+  Clock,
   List,
   Loader2,
-  MoreHorizontal,
+  RotateCcw,
   Terminal,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 // TaskSidebar is the task page's left rail: everything about the task that
 // isn't the activity itself. It holds the status, title, the view switcher
@@ -176,7 +199,7 @@ export function TaskSidebar({
         )}
       </div>
 
-      {/* footer actions */}
+      {/* footer actions: every task action rendered as its own top-level row */}
       <div className="flex shrink-0 flex-col gap-0.5 border-t p-2">
         <ArchiveRow
           task={task}
@@ -185,30 +208,32 @@ export function TaskSidebar({
           onUnarchive={onUnarchive}
           pending={archivePending}
         />
-        <TaskActionsMenu
+        {canCancelTask(task) && (
+          <SidebarAction
+            icon={Ban}
+            label="Cancel"
+            collapsed={collapsed}
+            onClick={onCancel}
+            disabled={cancelPending}
+            pending={cancelPending}
+            destructive
+          />
+        )}
+        {canRestartTask(task) && (
+          <SidebarAction
+            icon={RotateCcw}
+            label="Restart"
+            collapsed={collapsed}
+            onClick={onRestart}
+            disabled={restartPending}
+            pending={restartPending}
+          />
+        )}
+        <AutoArchiveRow
           task={task}
-          onAutoArchiveChange={onAutoArchiveChange}
-          autoArchivePending={autoArchivePending}
-          onCancel={onCancel}
-          cancelPending={cancelPending}
-          onRestart={onRestart}
-          restartPending={restartPending}
-          renderTrigger={(pending) => (
-            <Button
-              variant="ghost"
-              disabled={pending}
-              title="More actions"
-              aria-label="More actions"
-              className={cn(footerRowClass, collapsed && 'justify-center px-0')}
-            >
-              {pending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <MoreHorizontal className="h-4 w-4" />
-              )}
-              {!collapsed && <span>More actions</span>}
-            </Button>
-          )}
+          collapsed={collapsed}
+          onChange={onAutoArchiveChange}
+          pending={autoArchivePending}
         />
       </div>
     </aside>
@@ -290,6 +315,51 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 
 const footerRowClass = 'h-9 w-full justify-start gap-3 px-3 font-medium text-muted-foreground'
 
+// SidebarAction is one footer action row: an icon plus a label when the sidebar
+// is expanded, icon-only (with a tooltip + aria-label) when collapsed. Every
+// task action in the footer — archive, cancel, restart, auto-archive — renders
+// through this so they share one treatment. Extra props (onClick, ref, aria-*
+// from a dropdown trigger) pass straight through to the underlying Button.
+function SidebarAction({
+  ref,
+  icon: Icon,
+  label,
+  collapsed,
+  disabled,
+  pending,
+  destructive,
+  title,
+  trailing,
+  ...props
+}: {
+  icon: LucideIcon
+  label: string
+  collapsed: boolean
+  pending?: boolean
+  destructive?: boolean
+  trailing?: React.ReactNode
+} & React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      ref={ref}
+      variant="ghost"
+      disabled={disabled}
+      title={title ?? label}
+      aria-label={label}
+      className={cn(
+        footerRowClass,
+        destructive && 'text-destructive hover:text-destructive',
+        collapsed && 'justify-center px-0',
+      )}
+      {...props}
+    >
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+      {!collapsed && <span>{label}</span>}
+      {!collapsed && trailing}
+    </Button>
+  )
+}
+
 // ArchiveRow is the sidebar's archive/unarchive action. Same semantics as
 // ArchiveButton (icon flips with the available action, auto-archive countdown
 // stays visible, greys out when neither action is available) restyled as a
@@ -313,19 +383,86 @@ function ArchiveRow({
   const label = unarchive ? 'Unarchive' : 'Archive'
   const Icon = unarchive ? ArchiveRestore : Archive
   return (
-    <Button
-      variant="ghost"
+    <SidebarAction
+      icon={Icon}
+      label={label}
+      collapsed={collapsed}
       onClick={unarchive ? onUnarchive : onArchive}
       disabled={pending || !canAct}
+      pending={pending}
       title={countdown ? `Auto-archives in ${countdown}` : `${label} task`}
-      aria-label={`${label} task`}
-      className={cn(footerRowClass, collapsed && 'justify-center px-0')}
-    >
-      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
-      {!collapsed && <span>{label}</span>}
-      {!collapsed && countdown && (
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{countdown}</span>
-      )}
-    </Button>
+      trailing={
+        countdown ? (
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground">{countdown}</span>
+        ) : undefined
+      }
+    />
+  )
+}
+
+// The auto-archive presets offered in the picker. Positive values are keyed by
+// their whole-second count to match autoArchiveSelectValue's lossless encoding.
+const AUTO_ARCHIVE_PRESETS: { value: string; label: string }[] = [
+  { value: AUTO_ARCHIVE_NEVER, label: 'Never' },
+  { value: AUTO_ARCHIVE_IMMEDIATE, label: 'Immediately' },
+  { value: String(60 * 60), label: '1 hour' },
+  { value: String(6 * 60 * 60), label: '6 hours' },
+  { value: String(24 * 60 * 60), label: '24 hours' },
+  { value: String(7 * 24 * 60 * 60), label: '7 days' },
+]
+
+// AutoArchiveRow is the sidebar's auto-archive delay control. The footer row
+// mirrors the other actions (clock icon + "Auto-archive" label, with the current
+// delay trailing when expanded); clicking it opens the preset picker. It's
+// disabled once archived, since an archived task no longer auto-archives.
+function AutoArchiveRow({
+  task,
+  collapsed,
+  onChange,
+  pending,
+}: {
+  task: Task
+  collapsed: boolean
+  onChange: (autoArchive: Duration) => void
+  pending?: boolean
+}) {
+  const current = autoArchiveSelectValue(task.autoArchive)
+  const preset = AUTO_ARCHIVE_PRESETS.find((p) => p.value === current)
+  // A task's auto_archive can be any duration the API set, not just a preset
+  // (e.g. 30m). When it's off-preset, show its real value and add a matching row
+  // so the current selection is still reflected.
+  const customLabel =
+    !preset && task.autoArchive ? formatCountdown(durationToMillis(task.autoArchive)) : null
+  const currentLabel = preset?.label ?? customLabel ?? 'Never'
+  const archived = isArchivedTask(task)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <SidebarAction
+          icon={Clock}
+          label="Auto-archive"
+          collapsed={collapsed}
+          disabled={pending || archived}
+          pending={pending}
+          title={archived ? 'Auto-archive' : `Auto-archives: ${currentLabel}`}
+          trailing={<span className="ml-auto text-xs text-muted-foreground">{currentLabel}</span>}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup
+          value={current}
+          onValueChange={(v) => onChange(durationFromAutoArchiveSelect(v))}
+        >
+          {AUTO_ARCHIVE_PRESETS.map((p) => (
+            <DropdownMenuRadioItem key={p.value} value={p.value}>
+              {p.label}
+            </DropdownMenuRadioItem>
+          ))}
+          {customLabel && (
+            <DropdownMenuRadioItem value={current}>{customLabel}</DropdownMenuRadioItem>
+          )}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
