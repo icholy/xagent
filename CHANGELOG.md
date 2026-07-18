@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.16.0](https://github.com/icholy/xagent/compare/v2.15.0...v2.16.0) (2026-07-18)
+
+
+### Features
+
+* **webui:** add schedules list and create/edit views ([57cda24](https://github.com/icholy/xagent/commit/57cda2402b22aa72f9ef53bb10cf7e00a055660c))
+* **webui:** remove cron preset buttons from the schedule form ([3df1828](https://github.com/icholy/xagent/commit/3df1828ada30b83684a3be206802edfe85248da3))
+* **webui:** split the events page into full-width tabs ([3bc50f7](https://github.com/icholy/xagent/commit/3bc50f7c23941d1f7254b244a96e8ee0f3ab4e8e))
+
+
+### Bug Fixes
+
+* **server:** only flag instruction events as wakes when the task actually starts ([7a8f66c](https://github.com/icholy/xagent/commit/7a8f66c647f0c28d0aa3540692512a302e9f4acf))
+* **webui:** make top nav span the full viewport width ([fcdf3ad](https://github.com/icholy/xagent/commit/fcdf3adc2338f2f99f55d4827e6be050578b61ae))
+* **webui:** show archived badge next to status in task detail view ([07e2034](https://github.com/icholy/xagent/commit/07e2034eaa7f51d1039f8aa6a15460d2683fcd95))
+
+
+### Miscellaneous
+
+* **server:** inline instruction wake condition ([541ab80](https://github.com/icholy/xagent/commit/541ab80d69b0f49d24596235fcd1c71644bec2c6))
+* **webui:** make tasks, workspaces, and members pages full width ([babb8d0](https://github.com/icholy/xagent/commit/babb8d015e902ff21f6b580e9b5a444527149217))
+
 ## [2.15.0](https://github.com/icholy/xagent/compare/v2.14.1...v2.15.0) (2026-07-17)
 
 
