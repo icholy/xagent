@@ -13,11 +13,13 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkspacesIndexRouteImport } from './routes/workspaces.index'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
+import { Route as SchedulesIndexRouteImport } from './routes/schedules.index'
 import { Route as MembersIndexRouteImport } from './routes/members.index'
 import { Route as KeysIndexRouteImport } from './routes/keys.index'
 import { Route as EventsIndexRouteImport } from './routes/events.index'
 import { Route as TasksNewRouteImport } from './routes/tasks.new'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
+import { Route as SchedulesNewRouteImport } from './routes/schedules.new'
 import { Route as RoutingTesteventRouteImport } from './routes/routing.testevent'
 import { Route as RoutingNewRouteImport } from './routes/routing.new'
 import { Route as RoutingIndexRouteImport } from './routes/routing.$index'
@@ -25,6 +27,7 @@ import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as KeysNewRouteImport } from './routes/keys.new'
 import { Route as GithubSetupRouteImport } from './routes/github.setup'
 import { Route as EventsIdRouteImport } from './routes/events.$id'
+import { Route as SchedulesIdEditRouteImport } from './routes/schedules.$id.edit'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -44,6 +47,11 @@ const WorkspacesIndexRoute = WorkspacesIndexRouteImport.update({
 const TasksIndexRoute = TasksIndexRouteImport.update({
   id: '/tasks/',
   path: '/tasks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchedulesIndexRoute = SchedulesIndexRouteImport.update({
+  id: '/schedules/',
+  path: '/schedules/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MembersIndexRoute = MembersIndexRouteImport.update({
@@ -69,6 +77,11 @@ const TasksNewRoute = TasksNewRouteImport.update({
 const TasksIdRoute = TasksIdRouteImport.update({
   id: '/tasks/$id',
   path: '/tasks/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchedulesNewRoute = SchedulesNewRouteImport.update({
+  id: '/schedules/new',
+  path: '/schedules/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RoutingTesteventRoute = RoutingTesteventRouteImport.update({
@@ -106,6 +119,11 @@ const EventsIdRoute = EventsIdRouteImport.update({
   path: '/events/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SchedulesIdEditRoute = SchedulesIdEditRouteImport.update({
+  id: '/schedules/$id/edit',
+  path: '/schedules/$id/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,13 +135,16 @@ export interface FileRoutesByFullPath {
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
   '/routing/testevent': typeof RoutingTesteventRoute
+  '/schedules/new': typeof SchedulesNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/schedules/': typeof SchedulesIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/schedules/$id/edit': typeof SchedulesIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -135,13 +156,16 @@ export interface FileRoutesByTo {
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
   '/routing/testevent': typeof RoutingTesteventRoute
+  '/schedules/new': typeof SchedulesNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events': typeof EventsIndexRoute
   '/keys': typeof KeysIndexRoute
   '/members': typeof MembersIndexRoute
+  '/schedules': typeof SchedulesIndexRoute
   '/tasks': typeof TasksIndexRoute
   '/workspaces': typeof WorkspacesIndexRoute
+  '/schedules/$id/edit': typeof SchedulesIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,13 +178,16 @@ export interface FileRoutesById {
   '/routing/$index': typeof RoutingIndexRoute
   '/routing/new': typeof RoutingNewRoute
   '/routing/testevent': typeof RoutingTesteventRoute
+  '/schedules/new': typeof SchedulesNewRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tasks/new': typeof TasksNewRoute
   '/events/': typeof EventsIndexRoute
   '/keys/': typeof KeysIndexRoute
   '/members/': typeof MembersIndexRoute
+  '/schedules/': typeof SchedulesIndexRoute
   '/tasks/': typeof TasksIndexRoute
   '/workspaces/': typeof WorkspacesIndexRoute
+  '/schedules/$id/edit': typeof SchedulesIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -174,13 +201,16 @@ export interface FileRouteTypes {
     | '/routing/$index'
     | '/routing/new'
     | '/routing/testevent'
+    | '/schedules/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
     | '/keys/'
     | '/members/'
+    | '/schedules/'
     | '/tasks/'
     | '/workspaces/'
+    | '/schedules/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -192,13 +222,16 @@ export interface FileRouteTypes {
     | '/routing/$index'
     | '/routing/new'
     | '/routing/testevent'
+    | '/schedules/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events'
     | '/keys'
     | '/members'
+    | '/schedules'
     | '/tasks'
     | '/workspaces'
+    | '/schedules/$id/edit'
   id:
     | '__root__'
     | '/'
@@ -210,13 +243,16 @@ export interface FileRouteTypes {
     | '/routing/$index'
     | '/routing/new'
     | '/routing/testevent'
+    | '/schedules/new'
     | '/tasks/$id'
     | '/tasks/new'
     | '/events/'
     | '/keys/'
     | '/members/'
+    | '/schedules/'
     | '/tasks/'
     | '/workspaces/'
+    | '/schedules/$id/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -229,13 +265,16 @@ export interface RootRouteChildren {
   RoutingIndexRoute: typeof RoutingIndexRoute
   RoutingNewRoute: typeof RoutingNewRoute
   RoutingTesteventRoute: typeof RoutingTesteventRoute
+  SchedulesNewRoute: typeof SchedulesNewRoute
   TasksIdRoute: typeof TasksIdRoute
   TasksNewRoute: typeof TasksNewRoute
   EventsIndexRoute: typeof EventsIndexRoute
   KeysIndexRoute: typeof KeysIndexRoute
   MembersIndexRoute: typeof MembersIndexRoute
+  SchedulesIndexRoute: typeof SchedulesIndexRoute
   TasksIndexRoute: typeof TasksIndexRoute
   WorkspacesIndexRoute: typeof WorkspacesIndexRoute
+  SchedulesIdEditRoute: typeof SchedulesIdEditRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -266,6 +305,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks'
       fullPath: '/tasks/'
       preLoaderRoute: typeof TasksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schedules/': {
+      id: '/schedules/'
+      path: '/schedules'
+      fullPath: '/schedules/'
+      preLoaderRoute: typeof SchedulesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/members/': {
@@ -301,6 +347,13 @@ declare module '@tanstack/react-router' {
       path: '/tasks/$id'
       fullPath: '/tasks/$id'
       preLoaderRoute: typeof TasksIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schedules/new': {
+      id: '/schedules/new'
+      path: '/schedules/new'
+      fullPath: '/schedules/new'
+      preLoaderRoute: typeof SchedulesNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/routing/testevent': {
@@ -352,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/schedules/$id/edit': {
+      id: '/schedules/$id/edit'
+      path: '/schedules/$id/edit'
+      fullPath: '/schedules/$id/edit'
+      preLoaderRoute: typeof SchedulesIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -365,13 +425,16 @@ const rootRouteChildren: RootRouteChildren = {
   RoutingIndexRoute: RoutingIndexRoute,
   RoutingNewRoute: RoutingNewRoute,
   RoutingTesteventRoute: RoutingTesteventRoute,
+  SchedulesNewRoute: SchedulesNewRoute,
   TasksIdRoute: TasksIdRoute,
   TasksNewRoute: TasksNewRoute,
   EventsIndexRoute: EventsIndexRoute,
   KeysIndexRoute: KeysIndexRoute,
   MembersIndexRoute: MembersIndexRoute,
+  SchedulesIndexRoute: SchedulesIndexRoute,
   TasksIndexRoute: TasksIndexRoute,
   WorkspacesIndexRoute: WorkspacesIndexRoute,
+  SchedulesIdEditRoute: SchedulesIdEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

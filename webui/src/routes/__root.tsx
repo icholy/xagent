@@ -127,6 +127,13 @@ function RootComponent() {
                 Tasks
               </Link>
               <Link
+                to="/schedules"
+                search={{ org: currentOrgId }}
+                className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
+              >
+                Schedules
+              </Link>
+              <Link
                 to="/events"
                 search={{ org: currentOrgId }}
                 className="text-muted-foreground hover:text-foreground transition-colors [&.active]:text-foreground"
