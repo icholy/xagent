@@ -9,6 +9,7 @@ import (
 	"github.com/icholy/xagent/internal/model"
 	xagentv1 "github.com/icholy/xagent/internal/proto/xagent/v1"
 	"github.com/icholy/xagent/internal/store/teststore"
+	"github.com/icholy/xagent/internal/x/cmpx"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"gotest.tools/v3/assert"
@@ -410,10 +411,11 @@ func TestRunSchedule(t *testing.T) {
 	assert.Equal(t, tasks[0].Runner, "test-runner")
 
 	// The created event first (ScheduleActor), then one wake instruction event per
-	// template instruction — identical to a scheduled fire.
+	// template instruction — identical to a scheduled fire. Compare only Wake +
+	// Payload; the DB-assigned id/task_id/org_id and timestamp vary per run.
 	events, err := srv.store.ListEventsByTask(ctx, nil, resp.Task.Id, org.OrgID, nil)
 	assert.NilError(t, err)
-	assert.DeepEqual(t, eventShapes(events), []eventShape{
+	want := []*model.Event{
 		{Payload: &model.LifecyclePayload{
 			Kind:     model.LifecycleKindCreated,
 			Actor:    model.ScheduleActor,
@@ -421,7 +423,11 @@ func TestRunSchedule(t *testing.T) {
 		}},
 		{Wake: true, Payload: &model.InstructionPayload{Text: "bump deps", URL: "https://example.com/deps"}},
 		{Wake: true, Payload: &model.InstructionPayload{Text: "groom changelog"}},
-	})
+	}
+	assert.Assert(t, cmp.Len(events, len(want)))
+	for i := range want {
+		assert.DeepEqual(t, events[i], want[i], cmpx.OnlyFields("Wake", "Payload"))
+	}
 
 	// The schedule row is untouched: the cron cadence never advanced and no run was
 	// recorded on it. created_at/updated_at are ignored — the create response carries
@@ -512,20 +518,4 @@ func TestRunSchedule_NotFound(t *testing.T) {
 
 	_, err := srv.RunSchedule(ctx, &xagentv1.RunScheduleRequest{Id: 999})
 	assert.Equal(t, connect.CodeOf(err), connect.CodeNotFound)
-}
-
-// eventShape is the identity-independent projection of an event used to assert on
-// seeded events: only Wake + Payload, dropping the DB-assigned id/task_id/org_id
-// and timestamp.
-type eventShape struct {
-	Wake    bool
-	Payload model.EventPayload
-}
-
-func eventShapes(events []*model.Event) []eventShape {
-	shapes := make([]eventShape, len(events))
-	for i, e := range events {
-		shapes[i] = eventShape{Wake: e.Wake, Payload: e.Payload}
-	}
-	return shapes
 }
