@@ -140,28 +140,57 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	return nil
 }
 
-// fire materializes one schedule occurrence inside tx: it creates the task
-// exactly the way CreateTask does (Pending/Start, a created event attributed to
-// model.ScheduleActor, one instruction event per template instruction), then
-// advances the schedule to its next occurrence. The next fire is computed as the
-// first occurrence strictly after now, never after the stored next_run_at, so any
-// occurrences missed while the scheduler was down collapse into this single fire
-// (skip-only, never backfill). It returns the change notification to publish once
-// the tick commits.
-func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule) (model.Notification, error) {
-	now := time.Now()
-	firedAt := now.UTC()
+// Fire materializes one schedule occurrence inside tx: it creates the template
+// task and seeds its events exactly as CreateTask does (Pending/Start, a created
+// event attributed to model.ScheduleActor, one instruction event per template
+// instruction), and returns the created task plus the change notification to
+// publish once tx commits. It writes nothing to the schedule row — the caller
+// decides what, if anything, happens to the cadence: the worker's Scheduler.fire
+// advances next_run_at via AdvanceSchedule, while a one-off manual run
+// (RunSchedule) records nothing on the schedule at all. Sharing this function is
+// what makes a manual run and a scheduled run produce a byte-for-byte identical
+// task.
+func Fire(ctx context.Context, tx *sql.Tx, st Store, sched *model.Schedule) (*model.Task, model.Notification, error) {
 	// The schedule owns the template -> task/events mapping. Insert the task, then
 	// seed its events (Events needs the assigned task.ID), so a scheduled task is
 	// indistinguishable from a hand-created one downstream.
 	task := sched.Task()
-	if err := s.store.CreateTask(ctx, tx, task); err != nil {
-		return model.Notification{}, err
+	if err := st.CreateTask(ctx, tx, task); err != nil {
+		return nil, model.Notification{}, err
 	}
 	for _, ev := range sched.Events(task) {
-		if err := s.store.CreateEvent(ctx, tx, ev); err != nil {
-			return model.Notification{}, err
+		if err := st.CreateEvent(ctx, tx, ev); err != nil {
+			return nil, model.Notification{}, err
 		}
+	}
+	// The same "change" notification the manual create path emits: task created +
+	// task_events appended, with the runner set so its wake channel picks the new
+	// task up immediately. There is no user, so UserID / ClientID are left empty.
+	return task, model.Notification{
+		Type: "change",
+		Resources: []model.NotificationResource{
+			{Action: "created", Type: "task", ID: task.ID},
+			{Action: "appended", Type: "task_events", ID: task.ID},
+		},
+		OrgID:          task.OrgID,
+		Runner:         task.PendingRunner(),
+		Time:           time.Now(),
+		ChannelMessage: fmt.Sprintf("Task %d created on %s/%s.", task.ID, task.Runner, task.Workspace),
+	}, nil
+}
+
+// fire materializes one schedule occurrence via Fire, then advances the schedule
+// to its next occurrence. The next fire is computed as the first occurrence
+// strictly after now, never after the stored next_run_at, so any occurrences
+// missed while the scheduler was down collapse into this single fire (skip-only,
+// never backfill). It returns the change notification to publish once the tick
+// commits.
+func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule) (model.Notification, error) {
+	now := time.Now()
+	firedAt := now.UTC()
+	task, note, err := Fire(ctx, tx, s.store, sched)
+	if err != nil {
+		return model.Notification{}, err
 	}
 
 	// The task is fired either way; only the schedule write differs.
@@ -189,20 +218,7 @@ func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule)
 		}
 	}
 
-	// The same "change" notification the manual create path emits: task created +
-	// task_events appended, with the runner set so its wake channel picks the new
-	// task up immediately. There is no user, so UserID / ClientID are left empty.
-	return model.Notification{
-		Type: "change",
-		Resources: []model.NotificationResource{
-			{Action: "created", Type: "task", ID: task.ID},
-			{Action: "appended", Type: "task_events", ID: task.ID},
-		},
-		OrgID:          task.OrgID,
-		Runner:         task.PendingRunner(),
-		Time:           time.Now(),
-		ChannelMessage: fmt.Sprintf("Task %d created on %s/%s.", task.ID, task.Runner, task.Workspace),
-	}, nil
+	return note, nil
 }
 
 func (s *Scheduler) publish(ctx context.Context, n model.Notification) {
