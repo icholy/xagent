@@ -105,7 +105,7 @@ function TasksPage() {
   const tasks = data?.tasks ?? []
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="px-4 md:px-8 py-6">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Tasks</h1>
         <div className="flex flex-wrap items-center gap-4">

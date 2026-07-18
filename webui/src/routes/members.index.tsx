@@ -62,11 +62,11 @@ function MembersPage() {
   const members = data?.members ?? []
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="px-4 md:px-8 py-6">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold">Members</h1>
+        {isOwner && <AddMemberForm onAdd={refetch} />}
       </div>
-      {isOwner && <AddMemberForm onAdd={refetch} />}
       {members.length === 0 ? (
         <div className="text-muted-foreground text-center py-8">No members found</div>
       ) : (
@@ -107,7 +107,7 @@ function AddMemberForm({ onAdd }: { onAdd: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 mb-6">
+    <form onSubmit={handleSubmit} className="flex gap-2">
       <Input
         type="email"
         placeholder="Email address"
