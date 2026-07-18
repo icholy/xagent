@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 GOARCH=arm64 go build -ldflags "$LDFLAGS" -o prebuilt/xagent-l
 
 # Server image
 FROM alpine:3.24 AS server
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /app/xagent .
 EXPOSE 6464
