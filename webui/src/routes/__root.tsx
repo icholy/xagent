@@ -114,7 +114,7 @@ function RootComponent() {
           composer) can fill the remaining viewport with h-full. */}
       <div className="flex h-dvh flex-col">
         <nav className="shrink-0 border-b">
-          <div className="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
+          <div className="px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
             <Link to="/tasks/new" search={{ org: currentOrgId }} className="hidden md:block">
               <img src={xagentIcon} alt="XAgent" className="h-8 w-8" />
             </Link>
