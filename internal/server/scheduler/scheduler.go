@@ -187,7 +187,6 @@ func Fire(ctx context.Context, tx *sql.Tx, st Store, sched *model.Schedule) (*mo
 // commits.
 func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule) (model.Notification, error) {
 	now := time.Now()
-	firedAt := now.UTC()
 	task, note, err := Fire(ctx, tx, s.store, sched)
 	if err != nil {
 		return model.Notification{}, err
@@ -203,7 +202,7 @@ func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule)
 		s.log.Error("scheduler disabling schedule with unresolvable next occurrence", "id", sched.ID, "err", err)
 		sched.Enabled = false
 		sched.NextRunAt = nil
-		sched.LastRunAt = &firedAt
+		sched.LastRunAt = new(now.UTC())
 		sched.LastTaskID = &task.ID
 		if err := s.store.UpdateSchedule(ctx, tx, sched); err != nil {
 			return model.Notification{}, err
@@ -211,7 +210,7 @@ func (s *Scheduler) fire(ctx context.Context, tx *sql.Tx, sched *model.Schedule)
 	} else {
 		if err := s.store.AdvanceSchedule(ctx, tx, sched.ID, sched.OrgID, store.ScheduleAdvance{
 			NextRunAt:  &next,
-			LastRunAt:  &firedAt,
+			LastRunAt:  new(now.UTC()),
 			LastTaskID: &task.ID,
 		}); err != nil {
 			return model.Notification{}, err
