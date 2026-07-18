@@ -53,12 +53,13 @@ that takes the store subset it needs, so both the worker and the API handler cal
 
 // Fire materializes one schedule occurrence inside tx: it creates the template
 // task and seeds its events exactly as CreateTask does, and returns the task plus
-// the change notification to publish once tx commits. It does NOT advance the
-// schedule — the caller decides whether this fire moves the cron cadence
-// (Scheduler.fire, via AdvanceSchedule) or is a one-off manual run (RunSchedule,
-// which records only last_run_at/last_task_id). Sharing this function is what
-// makes a manual run and a scheduled run produce a byte-for-byte identical task.
-func Fire(ctx context.Context, tx *sql.Tx, st TaskStore, sched *model.Schedule) (*model.Task, model.Notification, error) {
+// the change notification to publish once tx commits. It writes nothing to the
+// schedule row — the caller decides what, if anything, happens to the cadence: the
+// worker's Scheduler.fire advances next_run_at via AdvanceSchedule, while a
+// one-off manual run (RunSchedule) records nothing on the schedule at all. Sharing
+// this function is what makes a manual run and a scheduled run produce a
+// byte-for-byte identical task.
+func Fire(ctx context.Context, tx *sql.Tx, st Store, sched *model.Schedule) (*model.Task, model.Notification, error) {
     task := sched.Task()
     if err := st.CreateTask(ctx, tx, task); err != nil {
         return nil, model.Notification{}, err
@@ -82,8 +83,10 @@ func Fire(ctx context.Context, tx *sql.Tx, st TaskStore, sched *model.Schedule) 
 }
 ```
 
-`TaskStore` is the two-method interface `Fire` needs (`CreateTask`, `CreateEvent`) — a subset
-of the existing scheduler `Store`, satisfied by `*store.Store` unchanged. `Scheduler.fire`
+`Store` is the existing scheduler `Store` interface (`internal/server/scheduler/scheduler.go`),
+which already declares the `CreateTask` and `CreateEvent` methods `Fire` needs; `*store.Store`
+satisfies it unchanged, so both the worker and the apiserver (whose `s.store` is a
+`*store.Store`) pass it as-is, and tests drive the existing `StoreMock`. `Scheduler.fire`
 becomes: call `Fire`, then `AdvanceSchedule` (the cadence half is unchanged).
 
 The template → task/events mapping is *already* shared: it lives in `model.Schedule.Task()`
@@ -244,9 +247,10 @@ Delete, which is destructive). Run `pnpm lint` in `webui/` before finishing.
 A layer cake — each slice is small, independently reviewable, and safe to merge before the ones
 above it land.
 
-1. **Refactor `fire` → shared `Fire`** — Delivers: the exported `scheduler.Fire` function + the
-   `TaskStore` interface, with `Scheduler.fire` reduced to `Fire` + `AdvanceSchedule`. Depends
-   on: nothing. Verifiable by: the existing scheduler `Tick` tests still pass unchanged (pure
+1. **Refactor `fire` → shared `Fire`** — Delivers: the exported `scheduler.Fire` function (taking
+   the existing `scheduler.Store` interface), with `Scheduler.fire` reduced to `Fire` +
+   `AdvanceSchedule`. Depends on: nothing. Verifiable by: the existing scheduler `Tick` tests
+   still pass unchanged, driven by the existing `StoreMock` (pure
    refactor — a due schedule still produces exactly one task, the right events, and an advanced
    `next_run_at`).
 2. **Proto + RPC handler** — Delivers: `RunSchedule` RPC, `RunScheduleRequest`/`Response`
