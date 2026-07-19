@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.17.0](https://github.com/icholy/xagent/compare/v2.16.0...v2.17.0) (2026-07-19)
+
+
+### Features
+
+* **schedule:** add RunSchedule RPC for manual one-off runs ([8a841ee](https://github.com/icholy/xagent/commit/8a841ee26accf0645e9ff9dda5511a8ac2670f72))
+* **webui:** add Run now button to schedules list ([92b4dee](https://github.com/icholy/xagent/commit/92b4dee856e3a8d98e6562c976139d41811d3cce))
+
+
+### Bug Fixes
+
+* install tzdata in server image so non-UTC schedule timezones resolve ([327441a](https://github.com/icholy/xagent/commit/327441a8810a537f3b5c90b48356cc1d7583c7b0)), closes [#1480](https://github.com/icholy/xagent/issues/1480)
+
+
+### Miscellaneous
+
+* **schedule:** compare fired events with cmpx.OnlyFields ([b670e9f](https://github.com/icholy/xagent/commit/b670e9fb8a09b4ec27e508d35c3ac1dec05a9a54))
+* **scheduler:** extract shared Fire from Scheduler.fire ([2c534fb](https://github.com/icholy/xagent/commit/2c534fbacca7f7de6c33b922220994d3fd3f8d55))
+* **scheduler:** inline firedAt with new(now.UTC()) ([c2ca157](https://github.com/icholy/xagent/commit/c2ca15730c53d48108143b7bd17461f31b232192))
+* **webui:** promote task sidebar actions to top-level ([fcede8b](https://github.com/icholy/xagent/commit/fcede8bc763aee3bbaed60195bcd5399642588fc))
+
 ## [2.16.0](https://github.com/icholy/xagent/compare/v2.15.0...v2.16.0) (2026-07-18)
 
 
