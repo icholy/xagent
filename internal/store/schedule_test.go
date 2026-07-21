@@ -22,8 +22,8 @@ func TestScheduleCRUD(t *testing.T) {
 
 	// Create — a future next_run_at keeps this schedule out of the claim
 	// query's due set (see TestClaimDueSchedules_Concurrent, which owns the due
-	// set for this package).
-	next := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
+	// set for this package). Relative to now so it can never rot into the past.
+	next := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Microsecond)
 	sched := &model.Schedule{
 		OrgID:     org.OrgID,
 		CreatedBy: org.UserID,
@@ -89,7 +89,9 @@ func TestAdvanceSchedule(t *testing.T) {
 	org := teststore.CreateOrg(t, s, nil)
 	ctx := t.Context()
 
-	next := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
+	// Future next_run_at keeps this row out of the due set that
+	// TestClaimDueSchedules_Concurrent owns; relative to now so it can't rot.
+	next := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Microsecond)
 	sched := &model.Schedule{
 		OrgID:     org.OrgID,
 		CreatedBy: org.UserID,
@@ -104,8 +106,8 @@ func TestAdvanceSchedule(t *testing.T) {
 
 	// Advancing records the fire: new next_run_at, last_run_at, last_task_id.
 	task := teststore.CreateTask(t, s, org, nil)
-	newNext := time.Date(2026, 7, 21, 13, 0, 0, 0, time.UTC)
-	firedAt := time.Date(2026, 7, 20, 13, 0, 0, 0, time.UTC)
+	newNext := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Microsecond)
+	firedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Microsecond)
 	assert.NilError(t, s.AdvanceSchedule(ctx, nil, sched.ID, org.OrgID, store.ScheduleAdvance{
 		NextRunAt:  &newNext,
 		LastRunAt:  &firedAt,
